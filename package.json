@@ -1,0 +1,50 @@
+{
+  "name": "shouldiuse",
+  "version": "0.1.0",
+  "description": "Evaluate a framework or library before installing it",
+  "main": "dist/index.js",
+  "ava": {
+    "babel": "inherit",
+    "require": [
+      "babel-register"
+    ]
+  },
+  "bin": {
+    "rampancy": "./dist/bin/runner.js"
+  },
+  "scripts": {
+    "build": "babel src --out-dir dist && chmod +x dist/bin/runner.js",
+    "test": "eslint index.js src/ && ava"
+  },
+  "directories": {
+    "lib": "./dist"
+  },
+  "author": "Daniele Rapagnani",
+  "license": "ISC",
+  "dependencies": {
+    "babel-cli": "^6.22.2",
+    "babel-preset-env": "^1.4.0",
+    "chalk": "^1.1.3",
+    "cli-table": "^0.3.1",
+    "enquirer": "^0.4.1",
+    "github": "^9.2.0",
+    "glob": "^7.1.1",
+    "humanize-duration": "^3.10.0",
+    "lodash": "^4.17.4",
+    "moment": "^2.18.1",
+    "mustache": "^2.3.0",
+    "ora": "^1.2.0",
+    "pluralize": "^5.0.0",
+    "prompt-password": "^0.1.1",
+    "request": "^2.81.0",
+    "request-promise-native": "^1.0.4",
+    "winston": "^2.3.1",
+    "yargs": "^6.6.0"
+  },
+  "devDependencies": {
+    "ava": "^0.18.1",
+    "babel-plugin-transform-object-rest-spread": "^6.23.0",
+    "eslint": "^3.15.0",
+    "pre-commit": "^1.2.2"
+  }
+}
