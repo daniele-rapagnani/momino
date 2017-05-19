@@ -16,7 +16,7 @@ export default class Package {
           rules: [
             { type: "cons", max: 121, message: "Is very young ({{#humanize}}{{value}}{{/humanize}})" },
             { type: "note", min: 121, max: 181, message: "Is not young but also not really mature ({{#humanize}}{{value}}{{/humanize}})" },
-            { type: "pro", min: 182, message: "Is a mature project ({{#humanize}}{{value}}{{/humanize}} ago)" },
+            { type: "pro", min: 182, message: "Has been around for a while ({{#humanize}}{{value}}{{/humanize}} ago)" },
           ],
         },
         commitsRate: {
@@ -99,6 +99,12 @@ export default class Package {
           },
         },
       ],
+      score: (data) => {
+        return Math.round(1000 * (data.age / 182.0) * (data.starsRate / 0.25)
+          * (data.commitsRate / 0.14) * (1 / data.lastCommitDaysAgo)
+          * (1 / data.oldestOpenIssueDaysAgo))
+        ;
+      },
       ...config,
     };
 
@@ -207,5 +213,7 @@ export default class Package {
         });
       }
     });
+
+    this.score = this.config.score(this.data);
   }
 }

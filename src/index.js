@@ -73,6 +73,8 @@ const main = async (packageName) => {
   await pk.analyze();
   pk.update();
 
+  out(`\n${chalk.bold(packageName)} has scored: ${chalk.green.bold(pk.score)}\n`);
+
   if (pk.pros.length > 0) {
     out(chalk.green.bold("Pros:"));
     pk.pros.forEach((pro) => out(chalk.green(`- ${pro}`)));

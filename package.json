@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "babel src --out-dir dist && chmod +x dist/bin/runner.js",
-    "test": "eslint index.js src/ && ava"
+    "test": "eslint index.js src/"
   },
   "directories": {
     "lib": "./dist"
