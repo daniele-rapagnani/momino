@@ -106,6 +106,23 @@ export default class Package {
           name: "age",
           data: [[0, 0], [90, 5], [365, 20], [730, 27], [1460, 40]],
         },
+        {
+          name: "starsRate",
+          data: [[0, 0], [1/7, 5], [1/2, 15], [1, 25], [10, 50], [24, 150], [50, 300], [200, 700]],
+        },
+        {
+          name: "commitsRate",
+          data: [[0, 0], [1/7, 15], [1, 50], [10, 100]],
+        },
+        {
+          name: "lastCommitDaysAgo",
+          data: [[0, 20], [7, 10], [30, 0], [60, 0]],
+        },
+        {
+          name: "oldestOpenIssueDaysAgo",
+          data: [[0, 30], [30, 0], [60, 0]],
+          regression: "linear",
+        },
       ],
       ...config,
     };
@@ -161,7 +178,13 @@ export default class Package {
         3
       );
 
-      return (prediction.points.filter((item) => item[0] == value) || [[0, 0]])[0][1];
+      winston.debug("Prediction", prediction);
+
+      return Math.max(0, _.get(
+        prediction.points.filter((item) => item[0] == value),
+        "[0][1]",
+        0
+      ));
     });
 
     this.score = Math.round(scorePartials.reduce((a, b) => a + b));
