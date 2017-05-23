@@ -1,7 +1,9 @@
+import _ from "lodash";
 import winston from "winston";
 import mustache from "mustache";
 import moment from "moment";
 import humanizeDuration from "humanize-duration";
+import regression from "regression";
 
 import { getNPMPackageData, formatFreq } from "./utils";
 
@@ -99,12 +101,12 @@ export default class Package {
           },
         },
       ],
-      score: (data) => {
-        return Math.round(1000 * (data.age / 182.0) * (data.starsRate / 0.25)
-          * (data.commitsRate / 0.14) * (1 / data.lastCommitDaysAgo)
-          * (1 / data.oldestOpenIssueDaysAgo))
-        ;
-      },
+      score: [
+        {
+          name: "age",
+          data: [[0, 0], [90, 5], [365, 20], [730, 27], [1460, 40]],
+        },
+      ],
       ...config,
     };
 
@@ -131,9 +133,38 @@ export default class Package {
       }
     );
 
-    this.spinner.stop();
-
     winston.debug(this.data);
+  }
+
+  calculateScore() {
+    this.spinner.text = "Calculating score";
+
+    const scorePartials = [].concat(this.config.score).map((scoreDef) => {
+      const value = this.data[scoreDef.name];
+
+      if (!value) {
+        return 0;
+      }
+
+      scoreDef = _.assign({ regression: "polynomial" }, scoreDef);
+
+      winston.debug(
+        "Analyzing score data",
+        scoreDef.data, [[value, null]],
+        "with regression",
+        scoreDef.regression
+      );
+
+      const prediction = regression(
+        scoreDef.regression,
+        [].concat(scoreDef.data, [[value, null]]),
+        3
+      );
+
+      return (prediction.points.filter((item) => item[0] == value) || [[0, 0]])[0][1];
+    });
+
+    this.score = Math.round(scorePartials.reduce((a, b) => a + b));
   }
 
   addMessage(data, threshold, rate) {
@@ -214,6 +245,6 @@ export default class Package {
       }
     });
 
-    this.score = this.config.score(this.data);
+    this.calculateScore();
   }
 }

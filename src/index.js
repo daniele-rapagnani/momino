@@ -28,6 +28,14 @@ const argv = require("yargs")
 
 const packageName = [].concat(argv._ || []).pop();
 
+if (!packageName) {
+  process.stderr.write(
+    chalk.red("Please specify a package to analyze. Type --help for more info\n")
+  );
+
+  process.exit(1);
+}
+
 const out = (string) => {
   process.stdout.write(`${string}\n`);
 };
@@ -41,6 +49,8 @@ const main = async (packageName) => {
     } else if (spinner) {
       spinner.fail(error.message || error.toString());
     }
+
+    process.exit(1);
   };
 
   process.on("unhandledRejection", handleError);
@@ -72,6 +82,8 @@ const main = async (packageName) => {
   const pk = new Package(packageName, spinner, conf);
   await pk.analyze();
   pk.update();
+
+  spinner.stop();
 
   out(`\n${chalk.bold(packageName)} has scored: ${chalk.green.bold(pk.score)}\n`);
 
