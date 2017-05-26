@@ -57,13 +57,34 @@ export default class Package {
             { type: "cons", min: 31, message: "Oldest open issue is very old ({{#humanize}}{{value}}{{/humanize}})" },
           ],
         },
+        downloadsRate: {
+          rules: [
+            { type: "pro", min: 1000, message: "Was installed a lot this month ({{#rate}}{{value}}{{/rate}})" },
+            { type: "note", min: 300, max: 999, message: "Last month not a lot of people installed it ({{#rate}}{{value}}{{/rate}})" },
+            { type: "cons", max: 299, message: "Was not installed a lot in the last month ({{#rate}}{{value}}{{/rate}})" },
+          ],
+        },
+        downloads: {
+          rules: [
+            { type: "pro", min: 1000000, message: "Is widely adopted ({{value}} total installs)" },
+            { type: "note", min: 200000, max: 999999, message: "Is moderately adopted ({{value}} total installs)" },
+            { type: "cons", max: 199999, message: "Is not adopted by many projects ({{value}} total installs)" },
+          ],
+        },
+        downloadsGrowth: {
+          rules: [
+            { type: "pro", min: 0.3, message: "Adoption is growing fast ({{#growth}}{{value}}{{/growth}} installs last month)" },
+            { type: "note", min: 0, max: 0.29, message: "Adoption is slow ({{#growth}}{{value}}{{/growth}} installs last month)" },
+            { type: "cons", max: 0, message: "Adoption is dropping ({{#growth}}{{value}}{{/growth}} installs last month)" },
+          ],
+        },
       },
       extractors: [
         {
           name: "age",
           extractor: (raw) => {
             const now = moment();
-            const createdAt = moment(raw.github.repo.created_at);
+            const createdAt = moment(_.get(raw, "github.repo.created_at"));
 
             return now.diff(createdAt, "days", true);
           },
@@ -71,33 +92,53 @@ export default class Package {
         {
           name: "starsRate",
           extractor: (raw, data) => {
-            const stars = raw.github.repo.stargazers_count;
+            const stars = _.get(raw, "github.repo.stargazers_count", 0);
             return stars / data.age;
           },
         },
         {
           name: "commitsPeriod",
-          extractor: (raw) => raw.github.commitsPeriod,
+          extractor: (raw) => _.get(raw, "github.commitsPeriod", 30),
         },
         {
           name: "commitsRate",
           extractor: (raw, data) => {
-            const commits = raw.github.commits;
+            const commits = _.get(raw, "github.commits", []);
             return commits.length > 0 ? commits.length / data.commitsPeriod : 0;
           },
         },
         {
           name: "lastCommitDaysAgo",
           extractor: (raw) => {
-            const commitDate = moment(raw.github.lastCommit.commit.author.date);
+            const commitDate = moment(_.get(raw, "github.lastCommit.commit.author.date"));
             return moment().diff(commitDate, "days", true);
           },
         },
         {
           name: "oldestOpenIssueDaysAgo",
           extractor: (raw) => {
-            const oldestIssueDate = moment(raw.github.oldestOpenIssue.created_at);
+            const oldestIssueDate = moment(_.get(raw, "github.oldestOpenIssue.created_at"));
             return moment().diff(oldestIssueDate, "days", true);
+          },
+        },
+        {
+          name: "downloadsRate",
+          extractor: (raw) => {
+            const downloads = _.get(raw, "npm.stats.downloads.lastMonth", 0);
+            return downloads / 30;
+          },
+        },
+        {
+          name: "downloads",
+          extractor: (raw) => {
+            return _.get(raw, "npm.stats.downloads.all", 0);
+          },
+        },
+        {
+          name: "downloadsGrowth",
+          extractor: (raw, data) => {
+            const totalRate = data.downloads / data.age;
+            return (data.downloadsRate / totalRate) - 1.0;
           },
         },
       ],
@@ -123,6 +164,25 @@ export default class Package {
           data: [[0, 30], [30, 0], [60, 0]],
           regression: "linear",
         },
+        {
+          name: "downloads",
+          data: [
+            [0, 0], [10000, 5], [100000, 10], [500000, 50],
+            [1000000, 150], [6000000, 200], [20000000, 500],
+            [200000000, 5000],
+          ],
+        },
+        {
+          name: "downloadsRate",
+          data: [[0, 0], [300, 5], [1000, 50], [10000, 150], [1000000, 500]],
+        },
+        {
+          name: "downloadsGrowth",
+          data: [
+            [0, 0], [0.01, 2], [0.1, 10], [0.5, 100],
+            [1.0, 200], [2.0, 500], [5.0, 2000], [10.0, 5000],
+          ],
+        },
       ],
       ...config,
     };
@@ -132,6 +192,9 @@ export default class Package {
     this.cons = [];
     this.notes = [];
     this.pros = [];
+
+    this.scorePartials = {};
+    this.score = 0;
   }
 
   async fetchData() {
@@ -141,6 +204,7 @@ export default class Package {
 
   async analyze() {
     const rawData = await this.fetchData();
+    require("fs").writeFileSync("yeah.json", JSON.stringify(rawData, null, 4));
 
     this.spinner.text = "Analyzing collected data";
 
@@ -156,11 +220,13 @@ export default class Package {
   calculateScore() {
     this.spinner.text = "Calculating score";
 
-    const scorePartials = [].concat(this.config.score).map((scoreDef) => {
+    this.scorePartials = {};
+
+    [].concat(this.config.score).forEach((scoreDef) => {
       const value = this.data[scoreDef.name];
 
       if (!value) {
-        return 0;
+        this.scorePartials[scoreDef.name] = 0;
       }
 
       scoreDef = _.assign({ regression: "polynomial" }, scoreDef);
@@ -180,17 +246,17 @@ export default class Package {
 
       winston.debug("Prediction", prediction);
 
-      return Math.max(0, _.get(
+      this.scorePartials[scoreDef.name] = Math.max(0, _.get(
         prediction.points.filter((item) => item[0] == value),
         "[0][1]",
         0
       ));
     });
 
-    this.score = Math.round(scorePartials.reduce((a, b) => a + b));
+    this.score = Math.round(_.values(this.scorePartials).reduce((a, b) => a + b));
   }
 
-  addMessage(data, threshold, rate) {
+  addMessage(data, threshold, rate, metric) {
     const values = {
       _data: this.data,
       value: rate,
@@ -199,6 +265,10 @@ export default class Package {
           render(text) * 24 * 60 * 60 * 1000,
           { round: true, largest: 2 }
         );
+      },
+      growth: () => (text, render) => {
+        const value = render(text);
+        return `${value > 0 ? "+" : ""}${Math.round(value * 100)}%`;
       },
       rate: () => (text, render) => {
         return formatFreq(render(text));
@@ -213,25 +283,29 @@ export default class Package {
 
     const message = mustache.render(data.message, values);
 
-    switch (data.type) {
+    this.addMessageType(data.type, message, metric);
+  }
+
+  addMessageType(type, message, metric) {
+    switch (type) {
       case "pro":
-        this.pros.push(message);
+        this.pros.push({ message, metric });
         break;
 
       case "note":
-        this.notes.push(message);
+        this.notes.push({ message, metric });
         break;
 
       case "cons":
-        this.cons.push(message);
+        this.cons.push({ message, metric });
         break;
 
       default:
-        throw new Error(`Unknown message type: ${data.type}`);
+        throw new Error(`Unknown message type: ${type}`);
     }
   }
 
-  processRate(rate, rule, threshold) {
+  processRate(rate, rule, threshold, metric) {
     if (rule.min === undefined && rule.max === undefined) {
       return;
     }
@@ -253,21 +327,25 @@ export default class Package {
     }
 
     if (shouldAdd) {
-      this.addMessage(rule, threshold, rate);
+      this.addMessage(rule, threshold, rate, metric);
     }
   }
 
   update() {
-    Object.keys(this.data).forEach((key) => {
-      const threshold = this.config.thresholds[key];
+    this.calculateScore();
+
+    Object.keys(this.data).forEach((metric) => {
+      const threshold = this.config.thresholds[metric];
 
       if (threshold && threshold.rules) {
         threshold.rules.forEach((rule) => {
-          this.processRate(this.data[key], rule, threshold);
+          this.processRate(this.data[metric], rule, threshold, metric);
         });
+
+        if (_.isFunction(threshold.processor)) {
+          threshold.processor(this.data, this.addMessageType);
+        }
       }
     });
-
-    this.calculateScore();
   }
 }

@@ -4,6 +4,7 @@ import request from "request-promise-native";
 import github from "github";
 import moment from "moment";
 import pluralize from "pluralize";
+import store from "./store";
 
 const githubClient = new github({
   debug: Boolean(process.env.DEBUG),
@@ -18,6 +19,7 @@ export const formatFreq = (perDay) => {
     [1, "day"],
     [0.041, "hour"],
     [0.00069, "minute"],
+    [0.000011, "second"],
   ];
 
   for (let i = 0; i < table.length; i++) {
@@ -32,7 +34,9 @@ export const formatFreq = (perDay) => {
     }
   }
 
-  return freq;
+  const perSecond = (perDay / (24 * 60 * 60));
+
+  return `${Math.round(perSecond)} every second`;
 };
 
 export const npmSearch = async (search) => {
@@ -41,6 +45,26 @@ export const npmSearch = async (search) => {
   });
 
   return JSON.parse(result);
+};
+
+export const npmStats = async (info) => {
+  const lastMonthDownloads = await request({
+    url: `https://api.npmjs.org/downloads/point/last-month/${info.name}`,
+  });
+
+  const creationDate = moment(info.time.created).format("YYYY-MM-DD");
+  const todayDate = moment().format("YYYY-MM-DD");
+
+  const allDownloads = await request({
+    url: `https://api.npmjs.org/downloads/point/${creationDate}:${todayDate}/${info.name}`,
+  });
+
+  return {
+    downloads: {
+      lastMonth: _.get(JSON.parse(lastMonthDownloads), "downloads", 0),
+      all: _.get(JSON.parse(allDownloads), "downloads", 0),
+    },
+  };
 };
 
 export const getRepoInfoFromUrl = (url) => {
@@ -83,6 +107,9 @@ const getAllPages = async (func, ...args) => {
 export const getNPMPackageData = async (name, spinner, auth = null) => {
   spinner.text = "Querying NPM registry for informations";
   const info = await npmSearch(name);
+  const stats = await npmStats(info);
+
+  winston.debug("NPM Stats", stats);
 
   const lastVersion = Object.keys(info.versions).pop();
 
@@ -106,10 +133,17 @@ export const getNPMPackageData = async (name, spinner, auth = null) => {
   }
 
   if (auth) {
-    spinner.text = "Authenticating on GitHub";
+    spinner.text = "Authenticating on GitHub via user and password";
     githubClient.authenticate({
       type: "basic",
       ...auth,
+    });
+  } else if (store.github.has("githubToken")) {
+    spinner.text = "Authenticating on GitHub via token";
+
+    githubClient.authenticate({
+      type: "token",
+      token: store.github.get("githubToken"),
     });
   }
 
@@ -144,7 +178,10 @@ export const getNPMPackageData = async (name, spinner, auth = null) => {
   })).data[0];
 
   return {
-    npm: info,
+    npm: {
+      ...info,
+      stats,
+    },
     github: {
       repo,
       releases,
