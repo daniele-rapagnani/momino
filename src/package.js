@@ -8,9 +8,9 @@ import regression from "regression";
 import { getNPMPackageData, formatFreq } from "./utils";
 
 export default class Package {
-  constructor(name, spinner, config = {}) {
+  constructor(name, emitter, config = {}) {
     this.name = name;
-    this.spinner = spinner;
+    this.emitter = emitter;
 
     this.config = {
       thresholds: {
@@ -23,10 +23,10 @@ export default class Package {
         },
         commitsRate: {
           rules: [
-            { type: "cons", max: 0.14, min: 0.001, message: "Commits are sporadic ({{#rate}}{{value}}{{/rate}})" },
-            { type: "note", min: 0.141, max: 0.25, message: "Commits are not frequent ({{#rate}}{{value}}{{/rate}})" },
+            { type: "cons", max: 0.140, min: 0.001, message: "Commits are sporadic ({{#rate}}{{value}}{{/rate}})" },
+            { type: "note", min: 0.141, max: 0.250, message: "Commits are not frequent ({{#rate}}{{value}}{{/rate}})" },
             { type: "pro", min: 0.251, message: "Commits are frequent ({{#rate}}{{value}}{{/rate}})" },
-            { type: "cons", max: 0.0009, min: 0, message: "There were no commits in the last {{_data.commitsPeriod}} days" },
+            { type: "cons", max: 0.001, min: 0, message: "There were no commits in the last {{_data.commitsPeriod}} days" },
           ],
         },
         lastCommitDaysAgo: {
@@ -38,15 +38,15 @@ export default class Package {
         },
         starsRate: {
           rules: [
-            { type: "cons", max: 0.07, message: "Does not get many stars ({{#rate}}{{value}}{{/rate}})"},
-            { type: "note", min: 0.071, max: 0.5, message: "Gets a good amount of stars but not extraordinary ({{#rate}}{{value}}{{/rate}})"},
+            { type: "cons", max: 0.070, message: "Does not get many stars ({{#rate}}{{value}}{{/rate}})"},
+            { type: "note", min: 0.071, max: 0.50, message: "Gets a good amount of stars but not extraordinary ({{#rate}}{{value}}{{/rate}})"},
             { type: "pro", min: 0.51, message: "Gets a lot of stars ({{#rate}}{{value}}{{/rate}})"},
           ],
         },
         closedIssueRate: {
           rules: [
-            { type: "cons", max: 0.14, message: "Issues are closed slowly ({{#rate}}{{value}}{{/rate})"},
-            { type: "note", min: 0.141, max: 0.25, message: "Issues are solved in average time ({{#rate}}{{value}}{{/rate})"},
+            { type: "cons", max: 0.140, message: "Issues are closed slowly ({{#rate}}{{value}}{{/rate})"},
+            { type: "note", min: 0.141, max: 0.250, message: "Issues are solved in average time ({{#rate}}{{value}}{{/rate})"},
             { type: "pro", min: 0.251, message: "Issues are solved fast ({{#rate}}{{value}}{{/rate})"},
           ],
         },
@@ -73,9 +73,23 @@ export default class Package {
         },
         downloadsGrowth: {
           rules: [
-            { type: "pro", min: 0.3, message: "Adoption is growing fast ({{#growth}}{{value}}{{/growth}} installs last month)" },
-            { type: "note", min: 0, max: 0.29, message: "Adoption is slow ({{#growth}}{{value}}{{/growth}} installs last month)" },
-            { type: "cons", max: 0, message: "Adoption is dropping ({{#growth}}{{value}}{{/growth}} installs last month)" },
+            { type: "pro", min: 0.300, message: "Adoption is growing fast ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
+            { type: "note", min: 0, max: 0.299, message: "Adoption is slow ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
+            { type: "cons", max: 0, message: "Adoption is dropping ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
+          ],
+        },
+        releaseRate: {
+          rules: [
+            { type: "pro", min: (1 / 15), message: "Releases are frequent ({{#rate}}{{value}}{{/rate}})" },
+            { type: "note", max: (1 / 15), min: (1 / 30), message: "Releases are not so frequent ({{#rate}}{{value}}{{/rate}})" },
+            { type: "cons", max: (1 / 30.001), message: "Releases are sporadic ({{#rate}}{{value}}{{/rate}})" },
+          ],
+        },
+        releases: {
+          rules: [
+            { type: "pro", min: 35, message: "There are many releases ({{value}} releases)" },
+            { type: "note", min: 15, max: 34, message: "There are not so many releases ({{value}} releases)" },
+            { type: "cons", max: 14, message: "Few releases have been published ({{value}} releases)" },
           ],
         },
       },
@@ -98,13 +112,13 @@ export default class Package {
         },
         {
           name: "commitsPeriod",
-          extractor: (raw) => _.get(raw, "github.commitsPeriod", 30),
+          extractor: (raw) => _.get(raw, "github.commitsStats.all", []).length * 7,
         },
         {
           name: "commitsRate",
           extractor: (raw, data) => {
-            const commits = _.get(raw, "github.commits", []);
-            return commits.length > 0 ? commits.length / data.commitsPeriod : 0;
+            const commits = _.get(raw, "github.commitsStats.all", []);
+            return commits.length > 0 ? commits.reduce((a, b) => a + b) / data.commitsPeriod : 0;
           },
         },
         {
@@ -137,8 +151,41 @@ export default class Package {
         {
           name: "downloadsGrowth",
           extractor: (raw, data) => {
-            const totalRate = data.downloads / data.age;
-            return (data.downloadsRate / totalRate) - 1.0;
+            const monthBefore = _.get(raw, "npm.stats.downloads.monthBefore", false);
+
+            if (monthBefore === false) {
+              return 0;
+            }
+
+            const monthBeforeRate = monthBefore / 30;
+
+            return (data.downloadsRate / monthBeforeRate) - 1.0;
+          },
+        },
+        {
+          name: "releaseRate",
+          extractor: (raw) => {
+            const times =
+              _.values(_.omit(_.get(raw, "npm.time", {}), ["created", "modified", "unpublished"]))
+              .map((item) => moment(item))
+            ;
+
+            const timesSub = [].concat(times);
+            timesSub.shift();
+            timesSub.push(moment());
+
+            const intervals =
+              _.zip(times, timesSub)
+              .map((item) => item[1].diff(item[0], "days", true))
+            ;
+
+            return 1 / _.mean(intervals);
+          },
+        },
+        {
+          name: "releases",
+          extractor: (raw) => {
+            return _.keys(_.get(raw, "npm.versions", {})).length;
           },
         },
       ],
@@ -169,7 +216,7 @@ export default class Package {
           data: [
             [0, 0], [10000, 5], [100000, 10], [500000, 50],
             [1000000, 150], [6000000, 200], [20000000, 500],
-            [200000000, 5000],
+            [2000000000, 1500],
           ],
         },
         {
@@ -179,8 +226,20 @@ export default class Package {
         {
           name: "downloadsGrowth",
           data: [
-            [0, 0], [0.01, 2], [0.1, 10], [0.5, 100],
-            [1.0, 200], [2.0, 500], [5.0, 2000], [10.0, 5000],
+            [0, 0], [0.01, 2], [0.1, 10], [0.5, 25],
+            [1.0, 40], [2.0, 100], [5.0, 300], [10.0, 400],
+          ],
+        },
+        {
+          name: "releaseRate",
+          data: [
+            [1/90, 0], [1/60, 2], [1/40, 5], [1/30, 10], [1/15, 30], [1/5, 100],
+          ],
+        },
+        {
+          name: "releases",
+          data: [
+            [0, 0], [5, 1], [10, 5], [20, 15], [35, 25], [50, 50], [100, 150],
           ],
         },
       ],
@@ -195,18 +254,32 @@ export default class Package {
 
     this.scorePartials = {};
     this.score = 0;
+
+    const self = this;
+
+    this.emitter.on("*.progress", function (event) {
+      if (this.event == "package.progress") {
+        return;
+      }
+
+      self.emitter.emit("package.progress", { ...event, package: self });
+    });
   }
 
   async fetchData() {
-    this.spinner.text = "Fetching remote data";
-    return await getNPMPackageData(this.name, this.spinner, this.config.auth);
+    this.emitter.emit("progress.package", { text: "Fetching remote data" });
+    return await getNPMPackageData(this.name, this.emitter, this.config.auth);
   }
 
   async analyze() {
-    const rawData = await this.fetchData();
-    require("fs").writeFileSync("yeah.json", JSON.stringify(rawData, null, 4));
+    this.emitter.emit("package.analyzing");
 
-    this.spinner.text = "Analyzing collected data";
+    const rawData = await this.fetchData();
+
+    this.emitter.emit("package.progress", {
+      text: "Analyzing collected data",
+      package: this,
+    });
 
     this.config.extractors.forEach(
       (extractor) => {
@@ -218,7 +291,7 @@ export default class Package {
   }
 
   calculateScore() {
-    this.spinner.text = "Calculating score";
+    this.emitter.emit("progress.package", { text: "Calculating score" });
 
     this.scorePartials = {};
 
@@ -229,18 +302,29 @@ export default class Package {
         this.scorePartials[scoreDef.name] = 0;
       }
 
-      scoreDef = _.assign({ regression: "polynomial" }, scoreDef);
+      scoreDef = _.assign({ regression: "linear" }, scoreDef);
+
+      let insPos = _.findLastIndex(scoreDef.data, (d) => d[0] < value);
+      const data = [].concat(scoreDef.data);
+
+      if (insPos < 0) {
+        insPos = data.length;
+      }
+
+      data.splice(insPos + 1, 0, [value, null]);
 
       winston.debug(
         "Analyzing score data",
-        scoreDef.data, [[value, null]],
+        data,
+        "value inserted at index",
+        insPos,
         "with regression",
         scoreDef.regression
       );
 
       const prediction = regression(
         scoreDef.regression,
-        [].concat(scoreDef.data, [[value, null]]),
+        data,
         3
       );
 
@@ -310,6 +394,9 @@ export default class Package {
       return;
     }
 
+    // Keep 3 decimal places at most
+    rate = Math.round(rate * 1000) / 1000;
+
     let shouldAdd = false;
 
     if (rule.min !== undefined && rule.max === undefined) {
@@ -347,5 +434,19 @@ export default class Package {
         }
       }
     });
+
+    this.emitter.emit("package.updated");
+  }
+
+  shouldInstall([min, mid], strictMode = true) {
+    if (this.score < min) {
+      return false;
+    }
+
+    if (this.score < mid) {
+      return !strictMode;
+    }
+
+    return true;
   }
 }

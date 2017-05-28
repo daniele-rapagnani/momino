@@ -1,104 +1,80 @@
+import _ from "lodash";
 import chalk from "chalk";
-import winston from "winston";
-import inquirer from "inquirer";
-import ora from "ora";
 import Package from "../package";
+import fs from "fs";
+import path from "path";
+import PQueue from "p-queue";
+import { printResults } from "../results";
+import { createHandler, createBuilder } from "./common";
+import emitter from "../events";
 
-export const command = "study <package>";
+export const command = "study [package]";
 export const desc = "Displays a package score";
-export const builder = (yargs) => {
-  yargs.option("auth", {
-    alias: "A",
-    description: "Authenticate on GitHub",
+export const builder = createBuilder((yargs) => {
+  yargs.option("ranges", {
+    alias: "r",
+    description: "Specify the score ranges to use when deciding if you should use a package or not",
+    default: "300,500,1000",
   });
+
+  yargs.option("why", {
+    alias: "w",
+    description: "Gives a more detailed explanation of the score",
+    type: "boolean",
+  });
+});
+
+const analyzePackage = async (packageName, auth, ranges, why) => {
+  const pk = new Package(packageName, emitter, { auth });
+  await pk.analyze();
+  pk.update();
+
+  printResults(pk, ranges, !why);
+
+  return pk.shouldInstall(ranges);
 };
 
-export const handler = function(argv) {
+export const handler = createHandler(async (argv, spinner, auth) => {
   const packageName = argv.package;
+  const ranges = argv.ranges.split(/\s*,\s*/);
 
-  if (!packageName) {
-    process.stderr.write(
-      chalk.red("Please specify a package to analyze. Type --help for more info\n")
-    );
+  emitter.on("package.analyzing", () => spinner.start());
 
-    process.exit(1);
+  emitter.on("package.progress", (event) => {
+    if (event.text) {
+      spinner.text = `${chalk.bold(event.package.name)}: ${event.text}`;
+    }
+  });
+
+  emitter.on("package.updated", () => spinner.stop());
+
+  if (packageName) {
+    process.exit((await analyzePackage(packageName, auth, ranges, argv.why)) ? 0 : 1);
+  } else {
+    const pkgJsonPath = path.join(process.cwd(), "package.json");
+
+    if (!fs.existsSync(pkgJsonPath)) {
+      throw new Error("No package.json file found in this directory");
+    }
+
+    const pkgJsonData = require(pkgJsonPath);
+    const packages = _.keys(_.merge(
+      {},
+      _.get(pkgJsonData, "dependencies", {}),
+      _.get(pkgJsonData, "devDependencies", {})
+    ));
+
+    const queue = new PQueue({ concurrency: 4 });
+
+    packages.forEach((item) => {
+      queue.add(() => analyzePackage(
+        item,
+        auth,
+        ranges,
+        argv.why
+      ));
+    });
+
+    await queue;
   }
-
-  const out = (string) => {
-    process.stdout.write(`${string}\n`);
-  };
-
-  const main = async (packageName) => {
-    let spinner = null;
-
-    const handleError = (error) => {
-      if (process.env.DEBUG || !spinner) {
-        winston.error(error);
-      } else if (spinner) {
-        spinner.fail(error.message || error.toString());
-      }
-
-      process.exit(1);
-    };
-
-    process.on("unhandledRejection", handleError);
-    process.on("uncaughtException", handleError);
-
-    const conf = {};
-
-    if (argv.auth) {
-      conf.auth = await inquirer.prompt([
-        {
-          name: "username",
-          message: "Your GitHub username",
-        },
-        {
-          name: "password",
-          message: "Your GitHub password",
-          type: "password",
-        },
-      ]);
-    }
-
-    spinner = ora(`Analyzing package ${chalk.bold(packageName)}`).start();
-
-    const pk = new Package(packageName, spinner, conf);
-    await pk.analyze();
-    pk.update();
-
-    spinner.stop();
-
-    out(`\n${chalk.bold(packageName)} has scored: ${chalk.green.bold(pk.score)}\n`);
-
-    if (pk.pros.length > 0) {
-      out(chalk.green.bold("Pros:"));
-      pk.pros.forEach((pro) => {
-        let msg = chalk.green(`- ${pro.message}`);
-
-        if (pro.metric) {
-          const score = Math.round(pk.scorePartials[pro.metric]);
-
-          if (score) {
-            msg = `${msg} ${chalk.bold.green("+" + score)}`;
-          }
-        }
-
-        out(msg);
-      });
-    }
-
-    if (pk.cons.length > 0) {
-      out("");
-      out(chalk.red.bold("Cons:"));
-      pk.cons.forEach((cons) => out(chalk.red(`- ${cons.message}`)));
-    }
-
-    if (pk.notes.length > 0) {
-      out("");
-      out("Notes:");
-      pk.notes.forEach((note) => out(chalk.grey(`- ${note.message}`)));
-    }
-  };
-
-  main(packageName);
-};
+});

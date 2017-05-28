@@ -48,12 +48,23 @@ export const npmSearch = async (search) => {
 };
 
 export const npmStats = async (info) => {
+  const todayDate = moment().format("YYYY-MM-DD");
+  const lastMonth = moment().subtract(1, "month").format("YYYY-MM-DD");
+  const monthBefore = moment().subtract(2, "month").format("YYYY-MM-DD");
+  const creationDate = moment(info.time.created).format("YYYY-MM-DD");
+  const existsMonths = moment().diff(moment(info.time.created), "months", true);
+
   const lastMonthDownloads = await request({
-    url: `https://api.npmjs.org/downloads/point/last-month/${info.name}`,
+    url: `https://api.npmjs.org/downloads/point/${lastMonth}:${todayDate}/${info.name}`,
   });
 
-  const creationDate = moment(info.time.created).format("YYYY-MM-DD");
-  const todayDate = moment().format("YYYY-MM-DD");
+  let monthBeforeDownloads = false;
+
+  if (existsMonths >= 2) {
+    monthBeforeDownloads = await request({
+      url: `https://api.npmjs.org/downloads/point/${monthBefore}:${lastMonth}/${info.name}`,
+    });
+  }
 
   const allDownloads = await request({
     url: `https://api.npmjs.org/downloads/point/${creationDate}:${todayDate}/${info.name}`,
@@ -62,16 +73,18 @@ export const npmStats = async (info) => {
   return {
     downloads: {
       lastMonth: _.get(JSON.parse(lastMonthDownloads), "downloads", 0),
+      monthBefore: monthBeforeDownloads ?
+        _.get(JSON.parse(monthBeforeDownloads), "downloads", 0) : false,
       all: _.get(JSON.parse(allDownloads), "downloads", 0),
     },
   };
 };
 
 export const getRepoInfoFromUrl = (url) => {
-  const regex = /.+\:\/\/[^\/]+?\/([^\/]+?)\/([^\/]+?).git/g;
+  const regex = /.+\:\/\/[^\/]+?\/([^\/]+?)\/([^\/]+?)(?:\.git|\/)/g;
   const match = regex.exec(url);
 
-  if (!match[1] || !match[2]) {
+  if (!match || !match[1] || !match[2]) {
     return false;
   }
 
@@ -81,37 +94,19 @@ export const getRepoInfoFromUrl = (url) => {
   };
 };
 
-const getAllPages = async (func, ...args) => {
-  const results = [];
-  let data = null;
+export const getNPMPackageData = async (name, emitter, auth = null) => {
+  emitter.emit("npm.progress", { text: "Querying NPM registry for informations" });
 
-  do {
-    if (data === null) {
-      winston.debug("Fetching first page");
-      data = await func.apply(this, args);
-      results.push(data);
-    } else {
-      if (githubClient.hasNextPage(data)) {
-        winston.debug("Fetching next page");
-        data = await githubClient.getNextPage(data);
-        results.push(data);
-      } else {
-        data = false;
-      }
-    }
-  } while(data !== false);
-
-  return _.flatten(results.map((item) => item.data));
-};
-
-export const getNPMPackageData = async (name, spinner, auth = null) => {
-  spinner.text = "Querying NPM registry for informations";
   const info = await npmSearch(name);
   const stats = await npmStats(info);
 
   winston.debug("NPM Stats", stats);
 
-  const lastVersion = Object.keys(info.versions).pop();
+  const lastVersion = Object.keys(_.get(info, "versions", [])).pop();
+
+  if (!lastVersion) {
+    throw new Error("This package has no version informations");
+  }
 
   const repositoryUrl = _.get(
     info.versions[lastVersion],
@@ -133,13 +128,14 @@ export const getNPMPackageData = async (name, spinner, auth = null) => {
   }
 
   if (auth) {
-    spinner.text = "Authenticating on GitHub via user and password";
+    emitter.emit("github.progress", { text: "Authenticating on GitHub via user and password" });
+
     githubClient.authenticate({
       type: "basic",
       ...auth,
     });
   } else if (store.github.has("githubToken")) {
-    spinner.text = "Authenticating on GitHub via token";
+    emitter.emit("github.progress", { text: "Authenticating on GitHub via token" });
 
     githubClient.authenticate({
       type: "token",
@@ -147,49 +143,54 @@ export const getNPMPackageData = async (name, spinner, auth = null) => {
     });
   }
 
-  spinner.text = "Fetching repository information";
-  const repo = (await githubClient.repos.get(repository)).data;
+  emitter.emit("github.progress", { text: "Fetching repository information" });
 
-  const oldestOpenIssue = (await githubClient.issues.getForRepo({
+  const promises = [];
+
+  const getPartial = async (name, func, part) => {
+    return {
+      [name]: (part ? _.get((await func()), part) : (await func())),
+    };
+  };
+
+  promises.push(getPartial("repo", githubClient.repos.get.bind(this, repository), "data"));
+
+  promises.push(getPartial("oldestOpenIssue", githubClient.issues.getForRepo.bind(this, {
     ...repository,
     sort: "created",
     direction: "asc",
     per_page: 1,
-  })).data[0];
+  }), "data[0]"));
 
-  const releases = await getAllPages(githubClient.repos.getReleases, repository);
-  const oldestPR = (await githubClient.pullRequests.getAll({
+  promises.push(getPartial("oldestPR", githubClient.pullRequests.getAll.bind(this, {
     ...repository,
     sort: "created",
     direction: "asc",
     per_page: 1,
-  })).data[0];
+  }), "data[0]"));
 
-  const oneMonthAgo = moment().subtract(30, "days");
+  promises.push(getPartial(
+    "commitsStats",
+    githubClient.repos.getStatsParticipation.bind(this, repository),
+    "data"
+  ));
 
-  const commits = await getAllPages(githubClient.repos.getCommits, {
-    ...repository,
-    since: oneMonthAgo.format(),
-  });
+  promises.push(getPartial(
+    "lastCommit",
+    githubClient.repos.getCommits.bind(this, {
+      ...repository,
+      per_page: 1,
+    }),
+    "data[0]"
+  ));
 
-  const lastCommit = (await githubClient.repos.getCommits({
-    ...repository,
-    per_page: 1,
-  })).data[0];
+  const github = (await Promise.all(promises)).reduce((acc, b) => ({...acc, ...b}));
 
   return {
     npm: {
       ...info,
       stats,
     },
-    github: {
-      repo,
-      releases,
-      oldestPR,
-      oldestOpenIssue,
-      commits,
-      commitsPeriod: 30,
-      lastCommit,
-    },
+    github,
   };
 };
