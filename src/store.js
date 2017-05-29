@@ -1,6 +1,6 @@
 import dataStore from "data-store";
 
-const store = dataStore("shouldiuse");
+const store = dataStore("monk");
 
 store.create("github");
 

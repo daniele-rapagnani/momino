@@ -1,5 +1,6 @@
 import _ from "lodash";
 import chalk from "chalk";
+import pluralize from "pluralize";
 
 const out = (msg) => process.stdout.write(`${msg}\n`);
 
@@ -52,4 +53,30 @@ export function printResults(pkg, ranges = null, short = true) {
   printScore(pkg);
   out("");
   printReasons(pkg);
+}
+
+export function printReportLine(color, message, list) {
+  if (list.length > 0) {
+    out(
+      chalk[color].bold(list.length) +
+      chalk[color](` ${pluralize("package", list.length)} ${message}: `) +
+      chalk[color].bold(`${list.map((p) => p.name).join(", ")}`)
+    );
+  }
+}
+
+export function printReport(pkgs, [lowRange, goodRange], strict = false) {
+  const failing = pkgs.filter((pkg) => pkg.score < (strict ? goodRange : lowRange));
+  const good = pkgs.filter((pkg) => pkg.score > goodRange);
+  let warning = [];
+
+  if (!strict) {
+    warning = pkgs.filter((pkg) => pkg.score >= lowRange && pkg.score < goodRange);
+  }
+
+  printReportLine("red", "are below your quality standard", failing);
+  printReportLine("yellow", "require careful consideration", warning);
+  printReportLine("green", "are good", good);
+
+  return failing.length > 0;
 }

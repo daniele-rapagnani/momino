@@ -95,7 +95,7 @@ export const getRepoInfoFromUrl = (url) => {
 };
 
 export const getNPMPackageData = async (name, emitter, auth = null) => {
-  emitter.emit("npm.progress", { text: "Querying NPM registry for informations" });
+  emitter.emit("npm.progress", { text: "Querying NPM registry for information" });
 
   const info = await npmSearch(name);
   const stats = await npmStats(info);
@@ -105,7 +105,7 @@ export const getNPMPackageData = async (name, emitter, auth = null) => {
   const lastVersion = Object.keys(_.get(info, "versions", [])).pop();
 
   if (!lastVersion) {
-    throw new Error("This package has no version informations");
+    throw new Error("This package has no version information");
   }
 
   const repositoryUrl = _.get(
