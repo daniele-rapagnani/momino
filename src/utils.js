@@ -42,6 +42,10 @@ export const formatFreq = (perDay) => {
 export const npmSearch = async (search) => {
   const result = await request({
     url: `http://registry.npmjs.org/${search}`,
+  }).catch((err) => {
+    if (err.statusCode == 404) {
+      return Promise.reject("The package could not be found");
+    }
   });
 
   return JSON.parse(result);

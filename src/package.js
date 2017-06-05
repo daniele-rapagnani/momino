@@ -59,9 +59,9 @@ export default class Package {
         },
         downloadsRate: {
           rules: [
-            { type: "pro", min: 1000, message: "Was installed a lot this month ({{#rate}}{{value}}{{/rate}})" },
-            { type: "note", min: 300, max: 999, message: "Last month not a lot of people installed it ({{#rate}}{{value}}{{/rate}})" },
-            { type: "cons", max: 299, message: "Was not installed a lot in the last month ({{#rate}}{{value}}{{/rate}})" },
+            { type: "pro", min: 51, message: "Was installed a lot this month ({{#rate}}{{value}}{{/rate}})" },
+            { type: "note", min: 21, max: 50, message: "Last month not a lot of people installed it ({{#rate}}{{value}}{{/rate}})" },
+            { type: "cons", max: 20, message: "Was installed rarely last month ({{#rate}}{{value}}{{/rate}})" },
           ],
         },
         downloads: {
@@ -90,6 +90,13 @@ export default class Package {
             { type: "pro", min: 35, message: "There are many releases ({{value}} releases)" },
             { type: "note", min: 15, max: 34, message: "There are not so many releases ({{value}} releases)" },
             { type: "cons", max: 14, message: "Few releases have been published ({{value}} releases)" },
+          ],
+        },
+        oldestPullRequestDaysAgo: {
+          rules: [
+            { type: "pro", max: 10, message: "Oldest open pull request is very recent ({{#humanize}}{{value}}{{/humanize}})" },
+            { type: "note", min: 11, max: 30, message: "Oldest open pull request is not recent ({{#humanize}}{{value}}{{/humanize}})" },
+            { type: "cons", min: 30, message: "Oldest open pull request is very old ({{#humanize}}{{value}}{{/humanize}})" },
           ],
         },
       },
@@ -188,6 +195,19 @@ export default class Package {
             return _.keys(_.get(raw, "npm.versions", {})).length;
           },
         },
+        {
+          name: "oldestPullRequestDaysAgo",
+          extractor: (raw) => {
+            const oldestPR = _.get(raw, "github.oldestPR.created_at");
+
+            if (!oldestPR) {
+              return false;
+            }
+
+            const oldestPRDate = moment(oldestPR);
+            return moment().diff(oldestPRDate, "days", true);
+          },
+        },
       ],
       score: [
         {
@@ -221,7 +241,7 @@ export default class Package {
         },
         {
           name: "downloadsRate",
-          data: [[0, 0], [300, 5], [1000, 50], [10000, 150], [1000000, 500]],
+          data: [[0, 0], [50, 5], [500, 250], [1000, 700], [10000, 1500]],
         },
         {
           name: "downloadsGrowth",
@@ -240,6 +260,12 @@ export default class Package {
           name: "releases",
           data: [
             [0, 0], [5, 1], [10, 5], [20, 15], [35, 25], [50, 50], [100, 150],
+          ],
+        },
+        {
+          name: "oldestPullRequestDaysAgo",
+          data: [
+            [30, 0], [20, 5], [15, 15], [10, 30], [5, 100],
           ],
         },
       ],
@@ -390,6 +416,10 @@ export default class Package {
   }
 
   processRate(rate, rule, threshold, metric) {
+    if (rate === false) {
+      return;
+    }
+
     if (rule.min === undefined && rule.max === undefined) {
       return;
     }

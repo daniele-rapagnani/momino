@@ -8,7 +8,7 @@ import { printResults, printReport } from "../results";
 import { createHandler, createBuilder } from "./common";
 import emitter from "../events";
 
-export const command = "study [package]";
+export const command = ["study [package]", "*"];
 export const desc = "Displays a package score";
 export const builder = createBuilder((yargs) => {
   yargs.option("ranges", {
