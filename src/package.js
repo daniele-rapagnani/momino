@@ -3,6 +3,7 @@ import winston from "winston";
 import mustache from "mustache";
 import moment from "moment";
 import humanizeDuration from "humanize-duration";
+import numeral from "numeral";
 import regression from "regression";
 
 import { getNPMPackageData, formatFreq } from "./utils";
@@ -26,7 +27,7 @@ export default class Package {
             { type: "cons", max: 0.140, min: 0.001, message: "Commits are sporadic ({{#rate}}{{value}}{{/rate}})" },
             { type: "note", min: 0.141, max: 0.250, message: "Commits are not frequent ({{#rate}}{{value}}{{/rate}})" },
             { type: "pro", min: 0.251, message: "Commits are frequent ({{#rate}}{{value}}{{/rate}})" },
-            { type: "cons", max: 0.001, min: 0, message: "There were no commits in the last {{_data.commitsPeriod}} days" },
+            { type: "cons", max: 0, min: 0, message: "There were no commits in the last {{_data.commitsPeriod}} days" },
           ],
         },
         lastCommitDaysAgo: {
@@ -66,9 +67,9 @@ export default class Package {
         },
         downloads: {
           rules: [
-            { type: "pro", min: 1000000, message: "Is widely adopted ({{value}} total installs)" },
-            { type: "note", min: 200000, max: 999999, message: "Is moderately adopted ({{value}} total installs)" },
-            { type: "cons", max: 199999, message: "Is not adopted by many projects ({{value}} total installs)" },
+            { type: "pro", min: 1000000, message: "Is widely adopted ({{#number}}{{value}}{{/number}} total installs)" },
+            { type: "note", min: 200000, max: 999999, message: "Is moderately adopted ({{#number}}{{value}}{{/number}} total installs)" },
+            { type: "cons", max: 199999, message: "Is not adopted by many projects ({{#number}}{{value}}{{/number}} total installs)" },
           ],
         },
         downloadsGrowth: {
@@ -97,6 +98,20 @@ export default class Package {
             { type: "pro", max: 10, message: "Oldest open pull request is very recent ({{#humanize}}{{value}}{{/humanize}})" },
             { type: "note", min: 11, max: 30, message: "Oldest open pull request is not recent ({{#humanize}}{{value}}{{/humanize}})" },
             { type: "cons", min: 30, message: "Oldest open pull request is very old ({{#humanize}}{{value}}{{/humanize}})" },
+          ],
+        },
+        issueClosingRate: {
+          rules: [
+            { type: "pro", min: 0.300, message: "A good number of issues were closed ({{#rate}}{{value}}{{/rate}} in the last {{#humanize}}{{_data.issueClosingInterval}}{{/humanize}})" },
+            { type: "note", min: 0.100, max: 0.299, message: "A moderate number of issues were closed ({{#rate}}{{value}}{{/rate}} in the last {{#humanize}}{{_data.issueClosingInterval}}{{/humanize}})" },
+            { type: "cons", max: 0.099, message: "Not a lot of issues were closed ({{#rate}}{{value}}{{/rate}} in the last {{#humanize}}{{_data.issueClosingInterval}}{{/humanize}})" },
+          ],
+        },
+        issueAvgClosingTime: {
+          rules: [
+            { type: "pro", max: 5, message: "Issues are closed fast (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
+            { type: "note", min: 6, max: 10, message: "Closing issues tooks some time (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
+            { type: "cons", min: 11, message: "Issues took a lot of time to be closed (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
           ],
         },
       },
@@ -208,6 +223,40 @@ export default class Package {
             return moment().diff(oldestPRDate, "days", true);
           },
         },
+        {
+          name: "issueClosingCount",
+          extractor: (raw) => {
+            return _.get(raw, "github.lastClosedIssues", []).length;
+          },
+        },
+        {
+          name: "issueClosingInterval",
+          extractor: (raw) => {
+            const lastClosedIssues = _.get(raw, "github.lastClosedIssues");
+            const oldest = _.last(lastClosedIssues);
+
+            return moment().diff(moment(oldest.created_at), "days", true);
+          },
+        },
+        {
+          name: "issueClosingRate",
+          extractor: (raw, data) => {
+            return data.issueClosingCount / data.issueClosingInterval;
+          },
+        },
+        {
+          name: "issueAvgClosingTime",
+          extractor: (raw) => {
+            const lastClosedIssues = _.get(raw, "github.lastClosedIssues");
+            const closedIssuesTimes = lastClosedIssues.map((item) => {
+              const creation = moment(item.created_at);
+              const closing = moment(item.closed_at);
+              return closing.diff(creation, "days", true);
+            });
+
+            return _.mean(closedIssuesTimes);
+          },
+        },
       ],
       score: [
         {
@@ -220,7 +269,7 @@ export default class Package {
         },
         {
           name: "commitsRate",
-          data: [[0, 0], [1/7, 15], [1, 50], [10, 100]],
+          data: [[1/8, 0], [1/7, 15], [1, 50], [10, 100]],
         },
         {
           name: "lastCommitDaysAgo",
@@ -236,12 +285,15 @@ export default class Package {
           data: [
             [0, 0], [10000, 5], [100000, 10], [500000, 50],
             [1000000, 150], [6000000, 200], [20000000, 500],
-            [2000000000, 1500],
+            [2000000000, 6000],
           ],
         },
         {
           name: "downloadsRate",
-          data: [[0, 0], [50, 5], [500, 250], [1000, 700], [10000, 1500]],
+          data: [
+            [0, 0], [50, 5], [500, 250], [1000, 700],
+            [10000, 1500], [100000, 3000], [1000000, 6000],
+          ],
         },
         {
           name: "downloadsGrowth",
@@ -266,6 +318,20 @@ export default class Package {
           name: "oldestPullRequestDaysAgo",
           data: [
             [30, 0], [20, 5], [15, 15], [10, 30], [5, 100],
+          ],
+        },
+        {
+          name: "issueClosingRate",
+          data: [
+            [0, 0], [0.150, 5], [0.300, 10], [1, 100],
+            [5, 300], [10, 500], [100, 2000],
+          ],
+        },
+        {
+          name: "issueAvgClosingTime",
+          data: [
+            [30, 0], [15, 5], [7, 15], [3, 30], [2, 100],
+            [1, 300], [0.500, 500],
           ],
         },
       ],
@@ -375,6 +441,9 @@ export default class Package {
           render(text) * 24 * 60 * 60 * 1000,
           { round: true, largest: 2 }
         );
+      },
+      number: () => (text, render) => {
+        return numeral(render(text)).format("0,0");
       },
       growth: () => (text, render) => {
         const value = render(text);

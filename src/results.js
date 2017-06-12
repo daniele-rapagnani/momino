@@ -8,7 +8,7 @@ export function printScore(pkg) {
   out(`\n${chalk.bold(pkg.name)} has scored: ${chalk.green.bold(pkg.score)}\n`);
 }
 
-export function printList(pkg, list, label, color = "green", withMetric = false) {
+export function printList(pkg, list, label, color = "green", withMetric = true) {
   list = _.get(pkg, list, []);
 
   if (list.length > 0) {
@@ -30,7 +30,7 @@ export function printList(pkg, list, label, color = "green", withMetric = false)
 }
 
 export function printReasons(pkg) {
-  printList(pkg, "pros", "Pros", "green", true);
+  printList(pkg, "pros", "Pros", "green");
   printList(pkg, "cons", "\nCons", "red");
   printList(pkg, "notes", "\nNotes", "grey");
 }

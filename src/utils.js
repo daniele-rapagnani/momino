@@ -188,6 +188,18 @@ export const getNPMPackageData = async (name, emitter, auth = null) => {
     "data[0]"
   ));
 
+  promises.push(getPartial(
+    "lastClosedIssues",
+    githubClient.issues.getForRepo.bind(this, {
+      ...repository,
+      sort: "created",
+      direction: "desc",
+      state: "closed",
+      per_page: 100,
+    }),
+    "data"
+  ));
+
   const github = (await Promise.all(promises)).reduce((acc, b) => ({...acc, ...b}));
 
   return {
