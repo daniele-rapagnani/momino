@@ -7,7 +7,7 @@ import regression from "regression";
 import glob from "glob";
 import path from "path";
 
-import { getNPMPackageData, formatFreq } from "../utils";
+import { formatFreq } from "../utils";
 
 export default class Package {
   constructor(name, emitter, config = {}) {
@@ -17,6 +17,7 @@ export default class Package {
     this.config = { ...config };
 
     this.metrics = {};
+    this.scrapers = {};
     this.data = {};
 
     this.cons = [];
@@ -28,6 +29,7 @@ export default class Package {
 
     const self = this;
 
+    this.loadScrapers();
     this.loadMetrics();
 
     this.emitter.on("*.progress", function (event) {
@@ -39,17 +41,53 @@ export default class Package {
     });
   }
 
-  loadMetrics() {
-    const metricFiles = glob.sync(path.join(__dirname, "metrics", "**", "*.js"));
+  loadPasses(dir, cb) {
+    const passesFiles = glob.sync(path.join(__dirname, dir, "*", "*.js"));
 
-    metricFiles.forEach((metricFile) => {
-      this.metrics[path.basename(metricFile, ".js")] = require(metricFile);
+    passesFiles.forEach((passFile) => {
+      const name = path.basename(passFile, ".js");
+      const module = require(passFile);
+
+      cb(name, module, passFile);
+    });
+  }
+
+  loadScrapers() {
+    this.loadPasses("scrapers", (name, module) => {
+      this.scrapers[name] = module.default;
+    });
+  }
+
+  loadMetrics() {
+    this.loadPasses("metrics", (name, module) => {
+      this.metrics[name] = module;
     });
   }
 
   async fetchData() {
     this.emitter.emit("progress.package", { text: "Fetching remote data" });
-    return await getNPMPackageData(this.name, this.emitter, this.config.auth);
+
+    const scrapers = _.keys(this.scrapers);
+    let rawData = {};
+
+    //@note: At the moment the concept of multiple
+    //       passes for the scraper is not usefull
+    //       but it can be used in the future to
+    //       do parallel processing of scrapers
+    //       that are interdependent
+
+    for (let i = 0; i < scrapers.length; i++) {
+      const data = await this.scrapers[scrapers[i]](
+        this.name,
+        this.emitter,
+        this.config,
+        rawData
+      );
+
+      rawData = { ...rawData, [scrapers[i]]: data };
+    }
+
+    return rawData;
   }
 
   async analyze() {

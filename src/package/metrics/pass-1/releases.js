@@ -7,7 +7,8 @@ export const extractor = (raw) => {
 export const rules = [
   { type: "pro", min: 35, message: "There are many releases ({{value}} releases)" },
   { type: "note", min: 15, max: 34, message: "There are not so many releases ({{value}} releases)" },
-  { type: "cons", max: 14, message: "Few releases have been published ({{value}} releases)" },
+  { type: "cons", max: 14, min: 1, message: "Few releases have been published ({{value}} releases)" },
+  { type: "cons", max: 0, min: 0, message: "There are no releases" },
 ];
 
 export const score = {

@@ -7,6 +7,10 @@ export const extractor = (raw) => {
     .map((item) => moment(item))
   ;
 
+  if (times.length == 0) {
+    return false;
+  }
+
   const timesSub = [].concat(times);
   timesSub.shift();
   timesSub.push(moment());
