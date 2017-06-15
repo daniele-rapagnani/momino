@@ -114,6 +114,11 @@ export default class Package {
             { type: "cons", min: 11, message: "Issues took a lot of time to be closed (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
           ],
         },
+        hasHomepage: {
+          rules: [
+            { type: "pro", min: 1, max: 1, message: "Has a dedicated website" },
+          ],
+        },
       },
       extractors: [
         {
@@ -257,6 +262,12 @@ export default class Package {
             return _.mean(closedIssuesTimes);
           },
         },
+        {
+          name: "hasHomepage",
+          extractor: (raw) => {
+            return _.get(raw, "github.repo.homepage") ? 1 : 0;
+          },
+        },
       ],
       score: [
         {
@@ -332,6 +343,12 @@ export default class Package {
           data: [
             [30, 0], [15, 5], [7, 15], [3, 30], [2, 100],
             [1, 300], [0.500, 500],
+          ],
+        },
+        {
+          name: "hasHomepage",
+          data: [
+            [0, 0], [1, 50],
           ],
         },
       ],
