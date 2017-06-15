@@ -14,35 +14,68 @@ export default class Package {
     this.emitter = emitter;
 
     this.config = {
-      thresholds: {
+      metrics: {
         age: {
+          extractor: (raw) => {
+            const now = moment();
+            const createdAt = moment(_.get(raw, "github.repo.created_at"));
+
+            return now.diff(createdAt, "days", true);
+          },
           rules: [
             { type: "cons", max: 121, message: "Is very young ({{#humanize}}{{value}}{{/humanize}})" },
             { type: "note", min: 121, max: 181, message: "Is not young but also not really mature ({{#humanize}}{{value}}{{/humanize}})" },
             { type: "pro", min: 182, message: "Has been around for a while ({{#humanize}}{{value}}{{/humanize}} ago)" },
           ],
+          score: {
+            data: [[0, 0], [90, 5], [365, 20], [730, 27], [1460, 40]],
+          },
         },
         commitsRate: {
+          extractor: (raw, data) => {
+            const commits = _.get(raw, "github.commitsStats.all", []);
+            return commits.length > 0 ? commits.reduce((a, b) => a + b) / data.commitsPeriod : 0;
+          },
           rules: [
             { type: "cons", max: 0.140, min: 0.001, message: "Commits are sporadic ({{#rate}}{{value}}{{/rate}})" },
             { type: "note", min: 0.141, max: 0.250, message: "Commits are not frequent ({{#rate}}{{value}}{{/rate}})" },
             { type: "pro", min: 0.251, message: "Commits are frequent ({{#rate}}{{value}}{{/rate}})" },
             { type: "cons", max: 0, min: 0, message: "There were no commits in the last {{_data.commitsPeriod}} days" },
           ],
+          score: {
+            data: [[1/8, 0], [1/7, 15], [1, 50], [10, 100]],
+          },
+        },
+        commitsPeriod: {
+          extractor: (raw) => _.get(raw, "github.commitsStats.all", []).length * 7,
         },
         lastCommitDaysAgo: {
+          extractor: (raw) => {
+            const commitDate = moment(_.get(raw, "github.lastCommit.commit.author.date"));
+            return moment().diff(commitDate, "days", true);
+          },
           rules: [
             { type: "pro", max: 3, message: "Last commit was done recently ({{#humanize}}{{value}}{{/humanize}} ago)" },
             { type: "note", min: 4, max: 15, message: "Last commit is not so recent ({{#humanize}}{{value}}{{/humanize}})" },
             { type: "cons", min: 15, message: "Last commit is not recent ({{#humanize}}{{value}}{{/humanize}})" },
           ],
+          score: {
+            data: [[0, 20], [7, 10], [30, 0], [60, 0]],
+          },
         },
         starsRate: {
+          extractor: (raw, data) => {
+            const stars = _.get(raw, "github.repo.stargazers_count", 0);
+            return stars / data.age;
+          },
           rules: [
             { type: "cons", max: 0.070, message: "Does not get many stars ({{#rate}}{{value}}{{/rate}})"},
             { type: "note", min: 0.071, max: 0.50, message: "Gets a good amount of stars but not extraordinary ({{#rate}}{{value}}{{/rate}})"},
             { type: "pro", min: 0.51, message: "Gets a lot of stars ({{#rate}}{{value}}{{/rate}})"},
           ],
+          score: {
+            data: [[0, 0], [1/7, 5], [1/2, 15], [1, 25], [10, 50], [24, 150], [50, 300], [200, 700]],
+          },
         },
         closedIssueRate: {
           rules: [
@@ -52,131 +85,54 @@ export default class Package {
           ],
         },
         oldestOpenIssueDaysAgo: {
+          extractor: (raw) => {
+            const oldestIssueDate = moment(_.get(raw, "github.oldestOpenIssue.created_at"));
+            return moment().diff(oldestIssueDate, "days", true);
+          },
           rules: [
             { type: "pro", max: 15, message: "Oldest open issue is quite recent ({{#humanize}}{{value}}{{/humanize}} ago)" },
             { type: "note", min: 16, max: 30, message: "Oldest open issue is growing old ({{#humanize}}{{value}}{{/humanize}})" },
             { type: "cons", min: 31, message: "Oldest open issue is very old ({{#humanize}}{{value}}{{/humanize}})" },
           ],
+          score: {
+            data: [[0, 30], [30, 0], [60, 0]],
+          },
         },
         downloadsRate: {
+          extractor: (raw) => {
+            const downloads = _.get(raw, "npm.stats.downloads.lastMonth", 0);
+            return downloads / 30;
+          },
           rules: [
             { type: "pro", min: 51, message: "Was installed a lot this month ({{#rate}}{{value}}{{/rate}})" },
             { type: "note", min: 21, max: 50, message: "Last month not a lot of people installed it ({{#rate}}{{value}}{{/rate}})" },
             { type: "cons", max: 20, message: "Was installed rarely last month ({{#rate}}{{value}}{{/rate}})" },
           ],
+          score: {
+            data: [
+              [0, 0], [50, 5], [500, 250], [1000, 700],
+              [10000, 1500], [100000, 3000], [1000000, 6000],
+            ],
+          },
         },
         downloads: {
+          extractor: (raw) => {
+            return _.get(raw, "npm.stats.downloads.all", 0);
+          },
           rules: [
             { type: "pro", min: 1000000, message: "Is widely adopted ({{#number}}{{value}}{{/number}} total installs)" },
             { type: "note", min: 200000, max: 999999, message: "Is moderately adopted ({{#number}}{{value}}{{/number}} total installs)" },
             { type: "cons", max: 199999, message: "Is not adopted by many projects ({{#number}}{{value}}{{/number}} total installs)" },
           ],
+          score: {
+            data: [
+              [0, 0], [10000, 5], [100000, 10], [500000, 50],
+              [1000000, 150], [6000000, 200], [20000000, 500],
+              [2000000000, 6000],
+            ],
+          },
         },
         downloadsGrowth: {
-          rules: [
-            { type: "pro", min: 0.300, message: "Adoption is growing fast ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
-            { type: "note", min: 0, max: 0.299, message: "Adoption is slow ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
-            { type: "cons", max: 0, message: "Adoption is dropping ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
-          ],
-        },
-        releaseRate: {
-          rules: [
-            { type: "pro", min: (1 / 15), message: "Releases are frequent ({{#rate}}{{value}}{{/rate}})" },
-            { type: "note", max: (1 / 15), min: (1 / 30), message: "Releases are not so frequent ({{#rate}}{{value}}{{/rate}})" },
-            { type: "cons", max: (1 / 30.001), message: "Releases are sporadic ({{#rate}}{{value}}{{/rate}})" },
-          ],
-        },
-        releases: {
-          rules: [
-            { type: "pro", min: 35, message: "There are many releases ({{value}} releases)" },
-            { type: "note", min: 15, max: 34, message: "There are not so many releases ({{value}} releases)" },
-            { type: "cons", max: 14, message: "Few releases have been published ({{value}} releases)" },
-          ],
-        },
-        oldestPullRequestDaysAgo: {
-          rules: [
-            { type: "pro", max: 10, message: "Oldest open pull request is very recent ({{#humanize}}{{value}}{{/humanize}})" },
-            { type: "note", min: 11, max: 30, message: "Oldest open pull request is not recent ({{#humanize}}{{value}}{{/humanize}})" },
-            { type: "cons", min: 30, message: "Oldest open pull request is very old ({{#humanize}}{{value}}{{/humanize}})" },
-          ],
-        },
-        issueClosingRate: {
-          rules: [
-            { type: "pro", min: 0.300, message: "A good number of issues were closed ({{#rate}}{{value}}{{/rate}} in the last {{#humanize}}{{_data.issueClosingInterval}}{{/humanize}})" },
-            { type: "note", min: 0.100, max: 0.299, message: "A moderate number of issues were closed ({{#rate}}{{value}}{{/rate}} in the last {{#humanize}}{{_data.issueClosingInterval}}{{/humanize}})" },
-            { type: "cons", max: 0.099, message: "Not a lot of issues were closed ({{#rate}}{{value}}{{/rate}} in the last {{#humanize}}{{_data.issueClosingInterval}}{{/humanize}})" },
-          ],
-        },
-        issueAvgClosingTime: {
-          rules: [
-            { type: "pro", max: 5, message: "Issues are closed fast (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
-            { type: "note", min: 6, max: 10, message: "Closing issues tooks some time (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
-            { type: "cons", min: 11, message: "Issues took a lot of time to be closed (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
-          ],
-        },
-        hasHomepage: {
-          rules: [
-            { type: "pro", min: 1, max: 1, message: "Has a dedicated website" },
-          ],
-        },
-      },
-      extractors: [
-        {
-          name: "age",
-          extractor: (raw) => {
-            const now = moment();
-            const createdAt = moment(_.get(raw, "github.repo.created_at"));
-
-            return now.diff(createdAt, "days", true);
-          },
-        },
-        {
-          name: "starsRate",
-          extractor: (raw, data) => {
-            const stars = _.get(raw, "github.repo.stargazers_count", 0);
-            return stars / data.age;
-          },
-        },
-        {
-          name: "commitsPeriod",
-          extractor: (raw) => _.get(raw, "github.commitsStats.all", []).length * 7,
-        },
-        {
-          name: "commitsRate",
-          extractor: (raw, data) => {
-            const commits = _.get(raw, "github.commitsStats.all", []);
-            return commits.length > 0 ? commits.reduce((a, b) => a + b) / data.commitsPeriod : 0;
-          },
-        },
-        {
-          name: "lastCommitDaysAgo",
-          extractor: (raw) => {
-            const commitDate = moment(_.get(raw, "github.lastCommit.commit.author.date"));
-            return moment().diff(commitDate, "days", true);
-          },
-        },
-        {
-          name: "oldestOpenIssueDaysAgo",
-          extractor: (raw) => {
-            const oldestIssueDate = moment(_.get(raw, "github.oldestOpenIssue.created_at"));
-            return moment().diff(oldestIssueDate, "days", true);
-          },
-        },
-        {
-          name: "downloadsRate",
-          extractor: (raw) => {
-            const downloads = _.get(raw, "npm.stats.downloads.lastMonth", 0);
-            return downloads / 30;
-          },
-        },
-        {
-          name: "downloads",
-          extractor: (raw) => {
-            return _.get(raw, "npm.stats.downloads.all", 0);
-          },
-        },
-        {
-          name: "downloadsGrowth",
           extractor: (raw, data) => {
             const monthBefore = _.get(raw, "npm.stats.downloads.monthBefore", false);
 
@@ -188,9 +144,19 @@ export default class Package {
 
             return (data.downloadsRate / monthBeforeRate) - 1.0;
           },
+          rules: [
+            { type: "pro", min: 0.300, message: "Adoption is growing fast ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
+            { type: "note", min: 0, max: 0.299, message: "Adoption is slow ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
+            { type: "cons", max: 0, message: "Adoption is dropping ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
+          ],
+          score: {
+            data: [
+              [0, 0], [0.01, 2], [0.1, 10], [0.5, 25],
+              [1.0, 40], [2.0, 100], [5.0, 300], [10.0, 400],
+            ],
+          },
         },
-        {
-          name: "releaseRate",
+        releaseRate: {
           extractor: (raw) => {
             const times =
               _.values(_.omit(_.get(raw, "npm.time", {}), ["created", "modified", "unpublished"]))
@@ -208,15 +174,33 @@ export default class Package {
 
             return 1 / _.mean(intervals);
           },
+          rules: [
+            { type: "pro", min: (1 / 15), message: "Releases are frequent ({{#rate}}{{value}}{{/rate}})" },
+            { type: "note", max: (1 / 15), min: (1 / 30), message: "Releases are not so frequent ({{#rate}}{{value}}{{/rate}})" },
+            { type: "cons", max: (1 / 30.001), message: "Releases are sporadic ({{#rate}}{{value}}{{/rate}})" },
+          ],
+          score: {
+            data: [
+              [1/90, 0], [1/60, 2], [1/40, 5], [1/30, 10], [1/15, 30], [1/5, 100],
+            ],
+          },
         },
-        {
-          name: "releases",
+        releases: {
           extractor: (raw) => {
             return _.keys(_.get(raw, "npm.versions", {})).length;
           },
+          rules: [
+            { type: "pro", min: 35, message: "There are many releases ({{value}} releases)" },
+            { type: "note", min: 15, max: 34, message: "There are not so many releases ({{value}} releases)" },
+            { type: "cons", max: 14, message: "Few releases have been published ({{value}} releases)" },
+          ],
+          score: {
+            data: [
+              [0, 0], [5, 1], [10, 5], [20, 15], [35, 25], [50, 50], [100, 150],
+            ],
+          },
         },
-        {
-          name: "oldestPullRequestDaysAgo",
+        oldestPullRequestDaysAgo: {
           extractor: (raw) => {
             const oldestPR = _.get(raw, "github.oldestPR.created_at");
 
@@ -227,15 +211,23 @@ export default class Package {
             const oldestPRDate = moment(oldestPR);
             return moment().diff(oldestPRDate, "days", true);
           },
+          rules: [
+            { type: "pro", max: 10, message: "Oldest open pull request is very recent ({{#humanize}}{{value}}{{/humanize}})" },
+            { type: "note", min: 11, max: 30, message: "Oldest open pull request is not recent ({{#humanize}}{{value}}{{/humanize}})" },
+            { type: "cons", min: 30, message: "Oldest open pull request is very old ({{#humanize}}{{value}}{{/humanize}})" },
+          ],
+          score: {
+            data: [
+              [30, 0], [20, 5], [15, 15], [10, 30], [5, 100],
+            ],
+          },
         },
-        {
-          name: "issueClosingCount",
+        issueClosingCount: {
           extractor: (raw) => {
             return _.get(raw, "github.lastClosedIssues", []).length;
           },
         },
-        {
-          name: "issueClosingInterval",
+        issueClosingInterval: {
           extractor: (raw) => {
             const lastClosedIssues = _.get(raw, "github.lastClosedIssues");
             const oldest = _.last(lastClosedIssues);
@@ -243,14 +235,23 @@ export default class Package {
             return moment().diff(moment(oldest.created_at), "days", true);
           },
         },
-        {
-          name: "issueClosingRate",
+        issueClosingRate: {
           extractor: (raw, data) => {
             return data.issueClosingCount / data.issueClosingInterval;
           },
+          rules: [
+            { type: "pro", min: 0.300, message: "A good number of issues were closed ({{#rate}}{{value}}{{/rate}} in the last {{#humanize}}{{_data.issueClosingInterval}}{{/humanize}})" },
+            { type: "note", min: 0.100, max: 0.299, message: "A moderate number of issues were closed ({{#rate}}{{value}}{{/rate}} in the last {{#humanize}}{{_data.issueClosingInterval}}{{/humanize}})" },
+            { type: "cons", max: 0.099, message: "Not a lot of issues were closed ({{#rate}}{{value}}{{/rate}} in the last {{#humanize}}{{_data.issueClosingInterval}}{{/humanize}})" },
+          ],
+          score: {
+            data: [
+              [0, 0], [0.150, 5], [0.300, 10], [1, 100],
+              [5, 300], [10, 500], [100, 2000],
+            ],
+          },
         },
-        {
-          name: "issueAvgClosingTime",
+        issueAvgClosingTime: {
           extractor: (raw) => {
             const lastClosedIssues = _.get(raw, "github.lastClosedIssues");
             const closedIssuesTimes = lastClosedIssues.map((item) => {
@@ -261,97 +262,32 @@ export default class Package {
 
             return _.mean(closedIssuesTimes);
           },
+          rules: [
+            { type: "pro", max: 5, message: "Issues are closed fast (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
+            { type: "note", min: 6, max: 10, message: "Closing issues tooks some time (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
+            { type: "cons", min: 11, message: "Issues took a lot of time to be closed (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
+          ],
+          score: {
+            data: [
+              [30, 0], [15, 5], [7, 15], [3, 30], [2, 100],
+              [1, 300], [0.500, 500],
+            ],
+          },
         },
-        {
-          name: "hasHomepage",
+        hasHomepage: {
           extractor: (raw) => {
             return _.get(raw, "github.repo.homepage") ? 1 : 0;
           },
-        },
-      ],
-      score: [
-        {
-          name: "age",
-          data: [[0, 0], [90, 5], [365, 20], [730, 27], [1460, 40]],
-        },
-        {
-          name: "starsRate",
-          data: [[0, 0], [1/7, 5], [1/2, 15], [1, 25], [10, 50], [24, 150], [50, 300], [200, 700]],
-        },
-        {
-          name: "commitsRate",
-          data: [[1/8, 0], [1/7, 15], [1, 50], [10, 100]],
-        },
-        {
-          name: "lastCommitDaysAgo",
-          data: [[0, 20], [7, 10], [30, 0], [60, 0]],
-        },
-        {
-          name: "oldestOpenIssueDaysAgo",
-          data: [[0, 30], [30, 0], [60, 0]],
-          regression: "linear",
-        },
-        {
-          name: "downloads",
-          data: [
-            [0, 0], [10000, 5], [100000, 10], [500000, 50],
-            [1000000, 150], [6000000, 200], [20000000, 500],
-            [2000000000, 6000],
+          rules: [
+            { type: "pro", min: 1, max: 1, message: "Has a dedicated website" },
           ],
+          score: {
+            data: [
+              [0, 0], [1, 50],
+            ],
+          },
         },
-        {
-          name: "downloadsRate",
-          data: [
-            [0, 0], [50, 5], [500, 250], [1000, 700],
-            [10000, 1500], [100000, 3000], [1000000, 6000],
-          ],
-        },
-        {
-          name: "downloadsGrowth",
-          data: [
-            [0, 0], [0.01, 2], [0.1, 10], [0.5, 25],
-            [1.0, 40], [2.0, 100], [5.0, 300], [10.0, 400],
-          ],
-        },
-        {
-          name: "releaseRate",
-          data: [
-            [1/90, 0], [1/60, 2], [1/40, 5], [1/30, 10], [1/15, 30], [1/5, 100],
-          ],
-        },
-        {
-          name: "releases",
-          data: [
-            [0, 0], [5, 1], [10, 5], [20, 15], [35, 25], [50, 50], [100, 150],
-          ],
-        },
-        {
-          name: "oldestPullRequestDaysAgo",
-          data: [
-            [30, 0], [20, 5], [15, 15], [10, 30], [5, 100],
-          ],
-        },
-        {
-          name: "issueClosingRate",
-          data: [
-            [0, 0], [0.150, 5], [0.300, 10], [1, 100],
-            [5, 300], [10, 500], [100, 2000],
-          ],
-        },
-        {
-          name: "issueAvgClosingTime",
-          data: [
-            [30, 0], [15, 5], [7, 15], [3, 30], [2, 100],
-            [1, 300], [0.500, 500],
-          ],
-        },
-        {
-          name: "hasHomepage",
-          data: [
-            [0, 0], [1, 50],
-          ],
-        },
-      ],
+      },
       ...config,
     };
 
@@ -390,9 +326,13 @@ export default class Package {
       package: this,
     });
 
-    this.config.extractors.forEach(
-      (extractor) => {
-        this.data[extractor.name] = extractor.extractor(rawData, this.data);
+    _.keys(this.config.metrics).forEach(
+      (metricName) => {
+        if (!this.config.metrics[metricName].extractor) {
+          return;
+        }
+
+        this.data[metricName] = this.config.metrics[metricName].extractor(rawData, this.data);
       }
     );
 
@@ -404,11 +344,17 @@ export default class Package {
 
     this.scorePartials = {};
 
-    [].concat(this.config.score).forEach((scoreDef) => {
-      const value = this.data[scoreDef.name];
+    _.keys(this.config.metrics).forEach((metricName) => {
+      let scoreDef = this.config.metrics[metricName].score;
+
+      if (!scoreDef) {
+        return;
+      }
+
+      const value = this.data[metricName];
 
       if (!value) {
-        this.scorePartials[scoreDef.name] = 0;
+        this.scorePartials[metricName] = 0;
       }
 
       scoreDef = _.assign({ regression: "linear" }, scoreDef);
@@ -439,7 +385,7 @@ export default class Package {
 
       winston.debug("Prediction", prediction);
 
-      this.scorePartials[scoreDef.name] = Math.max(0, _.get(
+      this.scorePartials[metricName] = Math.max(0, _.get(
         prediction.points.filter((item) => item[0] == value),
         "[0][1]",
         0
@@ -537,16 +483,16 @@ export default class Package {
   update() {
     this.calculateScore();
 
-    Object.keys(this.data).forEach((metric) => {
-      const threshold = this.config.thresholds[metric];
+    Object.keys(this.data).forEach((metricName) => {
+      const metric = this.config.metrics[metricName];
 
-      if (threshold && threshold.rules) {
-        threshold.rules.forEach((rule) => {
-          this.processRate(this.data[metric], rule, threshold, metric);
+      if (metric && metric.rules) {
+        metric.rules.forEach((rule) => {
+          this.processRate(this.data[metricName], rule, metric, metricName);
         });
 
-        if (_.isFunction(threshold.processor)) {
-          threshold.processor(this.data, this.addMessageType);
+        if (_.isFunction(metric.processor)) {
+          metric.processor(this.data, this.addMessageType);
         }
       }
     });
