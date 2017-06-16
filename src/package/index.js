@@ -4,8 +4,10 @@ import mustache from "mustache";
 import humanizeDuration from "humanize-duration";
 import numeral from "numeral";
 import regression from "regression";
+import camelCase from "camelcase";
 import glob from "glob";
 import path from "path";
+import fs from "fs";
 
 import { formatFreq } from "../utils";
 
@@ -14,7 +16,7 @@ export default class Package {
     this.name = name;
     this.emitter = emitter;
 
-    this.config = { ...config };
+    this.config = { debug: false, ...config };
 
     this.metrics = {};
     this.scrapers = {};
@@ -49,7 +51,7 @@ export default class Package {
     const passesFiles = glob.sync(path.join(__dirname, dir, "*", "*.js"));
 
     passesFiles.forEach((passFile) => {
-      const name = path.basename(passFile, ".js");
+      const name = camelCase(path.basename(passFile, ".js"));
       const module = require(passFile);
 
       cb(name, module, passFile);
@@ -98,6 +100,14 @@ export default class Package {
     this.emitter.emit("package.analyzing");
 
     const rawData = await this.fetchData();
+
+    if (this.config.debug) {
+      fs.writeFileSync(
+        path.join(process.cwd(), `${this.name}-raw.json`),
+        JSON.stringify(rawData, null, 2),
+        "utf8"
+      );
+    }
 
     this.emitter.emit("package.progress", {
       text: "Analyzing collected data",

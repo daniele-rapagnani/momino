@@ -14,7 +14,8 @@ export const builder = createBuilder((yargs) => {
     description: "Specifies the score ranges to use when deciding " +
       "if you should use a package or not this" +
       " is in the format: [lowest score, good score]",
-    default: "300,500",
+    type: "array",
+    default: [300, 500],
   });
 
   yargs.option("test", {
@@ -50,7 +51,6 @@ export const builder = createBuilder((yargs) => {
 
 export const handler = createHandler(async (argv, spinner, auth) => {
   let packages = argv.package;
-  argv.ranges = argv.ranges.split(/\s*,\s*/);
 
   emitter.on("package.analyzing", () => spinner.start());
 
@@ -62,7 +62,7 @@ export const handler = createHandler(async (argv, spinner, auth) => {
 
   emitter.on("package.updated", () => spinner.stop());
 
-  if (!packages) {
+  if (!packages || packages.length == 0 ) {
     packages = getProjectDependencies();
 
     if (packages === false) {
@@ -74,11 +74,9 @@ export const handler = createHandler(async (argv, spinner, auth) => {
   }
 
   const projectConfig = getProjectConfig();
+  const config = _.merge({}, projectConfig, argv, { auth });
 
-  const results = await analyzer(
-    packages,
-    _.merge({}, projectConfig, argv, { auth })
-  );
+  const results = await analyzer(packages, config);
 
   process.exit(printResults(results, argv) ? 0 : 1);
 });

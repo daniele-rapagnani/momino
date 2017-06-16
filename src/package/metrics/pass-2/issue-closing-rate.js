@@ -1,6 +1,6 @@
 
 export const extractor = (raw, data) => {
-  return data["issue-closing-count"] / data["issue-closing-interval"];
+  return data["issue-closing-count"] / data.issueClosingInterval;
 };
 
 export const rules = [

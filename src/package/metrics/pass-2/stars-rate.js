@@ -2,7 +2,7 @@ import _ from "lodash";
 
 export const extractor = (raw, data) => {
   const stars = _.get(raw, "github.repo.stargazers_count", 0);
-  return stars / data["age"];
+  return stars / data.age;
 };
 
 export const rules = [

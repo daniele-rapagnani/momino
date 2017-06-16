@@ -12,7 +12,11 @@ export default async (packages, config) => {
       const allowed = _.get(config, "allowed", []);
       const banned = _.get(config, "banned", []);
 
-      const pk = new Package(packageName, emitter, { auth: config.auth });
+      const pk = new Package(packageName, emitter, {
+        auth: config.auth,
+        debug: Boolean(process.env.DEBUG),
+      });
+      
       pk.init();
       await pk.analyze();
       pk.update();

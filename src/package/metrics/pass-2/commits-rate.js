@@ -2,7 +2,7 @@ import _ from "lodash";
 
 export const extractor = (raw, data) => {
   const commits = _.get(raw, "github.commitsStats.all", []);
-  return commits.length > 0 ? commits.reduce((a, b) => a + b) / data["commits-period"] : 0;
+  return commits.length > 0 ? commits.reduce((a, b) => a + b) / data.commitsPeriod : 0;
 };
 
 export const rules = [
