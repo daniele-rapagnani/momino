@@ -1,4 +1,7 @@
+import _ from "lodash";
 import pluralize from "pluralize";
+import path from "path";
+import fs from "fs";
 
 export const formatFreq = (perDay) => {
   const freq = 1.0 / perDay;
@@ -41,4 +44,30 @@ export const getRepoInfoFromUrl = (url) => {
     owner: match[1],
     repo: match[2],
   };
+};
+
+export const getProjectDependencies = () => {
+  const pkgJsonPath = path.join(process.cwd(), "package.json");
+
+  if (!fs.existsSync(pkgJsonPath)) {
+    return false;
+  }
+
+  const pkgJsonData = require(pkgJsonPath);
+
+  return _.keys(_.merge(
+    {},
+    _.get(pkgJsonData, "dependencies", {}),
+    _.get(pkgJsonData, "devDependencies", {})
+  ));
+};
+
+export const getProjectConfig = () => {
+  const configPath = path.join(process.cwd(), ".monkrc.json");
+
+  if (!fs.existsSync(configPath)) {
+    return {};
+  }
+
+  return require(configPath);
 };

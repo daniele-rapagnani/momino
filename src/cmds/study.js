@@ -1,14 +1,12 @@
 import _ from "lodash";
 import chalk from "chalk";
-import Package from "../package";
-import fs from "fs";
-import path from "path";
-import PQueue from "p-queue";
-import { printResults, printReport } from "../results";
+import { printResults } from "../results";
 import { createHandler, createBuilder } from "./common";
+import { getProjectDependencies, getProjectConfig } from "../utils";
 import emitter from "../events";
+import analyzer from "../analyzer";
 
-export const command = ["study [package]", "*"];
+export const command = ["study [package...]", "*"];
 export const desc = "Displays a package score";
 export const builder = createBuilder((yargs) => {
   yargs.option("ranges", {
@@ -23,12 +21,11 @@ export const builder = createBuilder((yargs) => {
     alias: "t",
     description: "Shows a small report of the result, "+
       "useful when integrated into a testing pipeline",
-    default: true,
   });
 
   yargs.option("strict", {
     alias: "s",
-    description: "Fail with any package below the 'good score' threshold (see -r)." +
+    description: "Fail with any package below the 'good score' threshold (see -r). " +
       "Useful in conjunction with -t",
   });
 
@@ -37,18 +34,23 @@ export const builder = createBuilder((yargs) => {
     description: "Gives a more detailed explanation of the score",
     type: "boolean",
   });
+
+  yargs.option("allowed", {
+    alias: "a",
+    description: "Allow a package even if it's under the required score",
+    type: "array",
+  });
+
+  yargs.option("banned", {
+    alias: "b",
+    description: "Ban a package even if it satisfied the minimum score",
+    type: "array",
+  });
 });
 
-const analyzePackage = async (packageName, auth) => {
-  const pk = new Package(packageName, emitter, { auth });
-  await pk.analyze();
-  pk.update();
-  return pk;
-};
-
 export const handler = createHandler(async (argv, spinner, auth) => {
-  const packageName = argv.package;
-  const ranges = argv.ranges.split(/\s*,\s*/);
+  let packages = argv.package;
+  argv.ranges = argv.ranges.split(/\s*,\s*/);
 
   emitter.on("package.analyzing", () => spinner.start());
 
@@ -60,45 +62,23 @@ export const handler = createHandler(async (argv, spinner, auth) => {
 
   emitter.on("package.updated", () => spinner.stop());
 
-  if (packageName) {
-    const pkg = await analyzePackage(packageName, auth);
-    printResults(pkg, ranges, !argv.why);
-    process.exit(pkg.shouldInstall(ranges) ? 0 : 1);
-  } else {
-    const pkgJsonPath = path.join(process.cwd(), "package.json");
+  if (!packages) {
+    packages = getProjectDependencies();
 
-    if (!fs.existsSync(pkgJsonPath)) {
-      throw new Error("No package.json file found in this directory");
-    }
-
-    const pkgJsonData = require(pkgJsonPath);
-    const packages = _.keys(_.merge(
-      {},
-      _.get(pkgJsonData, "dependencies", {}),
-      _.get(pkgJsonData, "devDependencies", {})
-    ));
-
-    const queue = new PQueue({ concurrency: 4 });
-    const pkgResults = [];
-
-    packages.forEach(async (item) => {
-      const pkg = await queue.add(() => analyzePackage(
-        item,
-        auth
-      ));
-
-      pkgResults.push(pkg);
-    });
-
-    await queue.onEmpty();
-
-    if (!argv.test) {
-      pkgResults.forEach((pkg) => {
-        printResults(pkg, ranges, !argv.why);
-      });
-    } else {
-      const result = printReport(pkgResults, ranges, argv.strict);
-      process.exit(result ? 1 : 0);
+    if (packages === false) {
+      throw new Error(
+        `No package.json file found in this directory.
+        Pass a package name as parameter to analyze it.`
+      );
     }
   }
+
+  const projectConfig = getProjectConfig();
+
+  const results = await analyzer(
+    packages,
+    _.merge({}, projectConfig, argv, { auth })
+  );
+
+  process.exit(printResults(results, argv) ? 0 : 1);
 });

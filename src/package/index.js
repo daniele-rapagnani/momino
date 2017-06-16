@@ -10,7 +10,7 @@ import path from "path";
 import { formatFreq } from "../utils";
 
 export default class Package {
-  constructor(name, emitter, config = {}) {
+  constructor(name, emitter = null, config = {}) {
     this.name = name;
     this.emitter = emitter;
 
@@ -26,11 +26,15 @@ export default class Package {
 
     this.scorePartials = {};
     this.score = 0;
+    this.preApproved = false;
+    this.banned = false;
+  }
 
-    const self = this;
-
+  init() {
     this.loadScrapers();
     this.loadMetrics();
+
+    const self = this;
 
     this.emitter.on("*.progress", function (event) {
       if (this.event == "package.progress") {
