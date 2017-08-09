@@ -139,7 +139,11 @@ export default class Package {
         return;
       }
 
-      const value = this.data[metricName];
+      let value = this.data[metricName];
+
+      if (!_.isNumber(value)) {
+        value = _.get(value, "value");
+      }
 
       if (!value) {
         this.scorePartials[metricName] = 0;
@@ -183,10 +187,11 @@ export default class Package {
     this.score = Math.round(_.values(this.scorePartials).reduce((a, b) => a + b));
   }
 
-  addMessage(data, threshold, rate, metric) {
+  addMessage(data, threshold, rate, metric, extra) {
     const values = {
       _data: this.data,
       value: rate,
+      extra,
       humanize: () => (text, render) => {
         return humanizeDuration(
           render(text) * 24 * 60 * 60 * 1000,
@@ -235,7 +240,15 @@ export default class Package {
     }
   }
 
-  processRate(rate, rule, threshold, metric) {
+  processRate(rateData, rule, threshold, metric) {
+    let rate = rateData;
+    let extra = {};
+
+    if (!_.isNumber(rateData)) {
+      rate = _.get(rateData, "value", false);
+      extra = _.get(rateData, "extra", {});
+    }
+
     if (rate === false) {
       return;
     }
@@ -264,7 +277,7 @@ export default class Package {
     }
 
     if (shouldAdd) {
-      this.addMessage(rule, threshold, rate, metric);
+      this.addMessage(rule, threshold, rate, metric, extra);
     }
   }
 

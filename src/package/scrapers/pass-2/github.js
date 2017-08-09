@@ -108,10 +108,24 @@ export default async (name, emitter, { auth, apiRateError }, raw) => {
   try {
     return (await Promise.all(promises)).reduce((acc, b) => ({...acc, ...b}));
   } catch (e) {
-    if (e.message.match("#rate-limiting") && apiRateError) {
+    let decoded = false;
+
+    try {
+      decoded = JSON.parse(e.message);
+    } catch (e) {
+      decoded = { message: e.message, documentation_url: "" };
+    }
+
+    if (decoded.documentation_url.match("#rate-limiting") && apiRateError) {
       throw apiRateError("GitHub", e);
     }
 
-    throw e;
+    let error = decoded.message;
+
+    if (decoded.documentation_url) {
+      error = `${error} (${decoded.documentation_url})`;
+    }
+
+    throw new Error(error);
   }
 };
