@@ -21,11 +21,14 @@ export const extractor = (raw, data) => {
   };
 };
 
-export const rules = [
-  { type: "pro", max: 10, message: "Oldest open pull request is still active (updated {{#humanize}}{{value}}{{/humanize}} ago) - {{{extra.url}}}" },
-  { type: "note", min: 11, max: 20, message: "Oldest open pull request has been inactive for some time (updated {{#humanize}}{{value}}{{/humanize}} ago) - {{{extra.url}}}" },
-  { type: "cons", min: 21, message: "Oldest open pull request is dead (updated {{#humanize}}{{value}}{{/humanize}} ago) - {{{extra.url}}}" },
-];
+export const rules = {
+  postfix: "(updated {{#humanize}}{{value}}{{/humanize}} ago) - {{{extra.url}}}",
+  rules: [
+    { type: "pro", max: 10, message: "Oldest open pull request is still active" },
+    { type: "note", min: 11, max: 20, message: "Oldest open pull request has been inactive for some time" },
+    { type: "cons", min: 21, message: "Oldest open pull request is dead" },
+  ],
+};
 
 export const score = {
   data: [

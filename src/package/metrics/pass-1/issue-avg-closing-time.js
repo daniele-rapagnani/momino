@@ -12,11 +12,14 @@ export const extractor = (raw) => {
   return _.mean(closedIssuesTimes);
 };
 
-export const rules = [
-  { type: "pro", max: 5, message: "Issues are closed fast (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount.value}} issues)" },
-  { type: "note", min: 6, max: 10, message: "Closing issues tooks some time (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount.value}} issues)" },
-  { type: "cons", min: 11, message: "Issues took a lot of time to be closed (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount.value}} issues)" },
-];
+export const rules = {
+  postfix: "(average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount.value}} issues)",
+  rules: [
+    { type: "pro", max: 5, message: "Issues are closed fast" },
+    { type: "note", min: 6, max: 10, message: "Closing issues tooks some time" },
+    { type: "cons", min: 11, message: "Issues took a lot of time to be closed" },
+  ],
+};
 
 export const score = {
   data: [

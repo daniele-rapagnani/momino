@@ -12,11 +12,14 @@ export const extractor = (raw, data) => {
   return (data.downloadsRate / monthBeforeRate) - 1.0;
 };
 
-export const rules = [
-  { type: "pro", min: 0.100, message: "Adoption is growing fast ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
-  { type: "note", min: 0, max: 0.099, message: "Adoption is slow ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
-  { type: "cons", max: 0, message: "Adoption is dropping ({{#growth}}{{value}}{{/growth}} installs this month vs month before)" },
-];
+export const rules = {
+  postfix: "({{#growth}}{{value}}{{/growth}} installs this month vs month before)",
+  rules: [
+    { type: "pro", min: 0.100, message: "Adoption is growing fast" },
+    { type: "note", min: 0, max: 0.099, message: "Adoption is slow" },
+    { type: "cons", max: 0, message: "Adoption is dropping" },
+  ],
+};
 
 export const score = {
   data: [

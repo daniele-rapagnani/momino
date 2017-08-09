@@ -23,11 +23,14 @@ export const extractor = (raw) => {
   return 1 / _.mean(intervals);
 };
 
-export const rules = [
-  { type: "pro", min: (1 / 15), message: "Releases are frequent ({{#rate}}{{value}}{{/rate}})" },
-  { type: "note", max: (1 / 15), min: (1 / 30), message: "Releases are not so frequent ({{#rate}}{{value}}{{/rate}})" },
-  { type: "cons", max: (1 / 30.001), message: "Releases are sporadic ({{#rate}}{{value}}{{/rate}})" },
-];
+export const rules = {
+  postfix: "({{#rate}}{{value}}{{/rate}})",
+  rules: [
+    { type: "pro", min: (1 / 15), message: "Releases are frequent" },
+    { type: "note", max: (1 / 15), min: (1 / 30), message: "Releases are not so frequent" },
+    { type: "cons", max: (1 / 30.001), message: "Releases are sporadic" },
+  ],
+};
 
 export const score = {
   data: [

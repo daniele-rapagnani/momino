@@ -191,7 +191,7 @@ export default class Package {
     this.score = Math.round(_.values(this.scorePartials).reduce((a, b) => a + b));
   }
 
-  addMessage(data, threshold, rate, metric, extra) {
+  addMessage(data, threshold, rate, metric, extra = {}, postfix = null) {
     const values = {
       _data: this.data,
       value: rate,
@@ -220,7 +220,12 @@ export default class Package {
       });
     }
 
-    const message = mustache.render(data.message, values);
+    let message = mustache.render(data.message, values);
+
+    if (postfix) {
+      postfix = mustache.render(postfix, values);
+      message = `${message} ${postfix}`;
+    }
 
     this.addMessageType(data.type, message, metric);
   }
@@ -244,7 +249,7 @@ export default class Package {
     }
   }
 
-  processRate(rateData, rule, threshold, metric) {
+  processRate(rateData, rule, threshold, metric, postfix) {
     let rate = _.get(rateData, "value", false);
     const extra = _.get(rateData, "extra", {});
 
@@ -276,7 +281,7 @@ export default class Package {
     }
 
     if (shouldAdd) {
-      this.addMessage(rule, threshold, rate, metric, extra);
+      this.addMessage(rule, threshold, rate, metric, extra, postfix);
     }
   }
 
@@ -287,8 +292,11 @@ export default class Package {
       const metric = this.metrics[metricName];
 
       if (metric && metric.rules) {
-        metric.rules.forEach((rule) => {
-          this.processRate(this.data[metricName], rule, metric, metricName);
+        const rules = !_.isArray(metric.rules) ? _.get(metric.rules, "rules", []) : metric.rules;
+        const postfix = !_.isArray(metric.rules) ? metric.rules.postfix : null;
+
+        rules.forEach((rule) => {
+          this.processRate(this.data[metricName], rule, metric, metricName, postfix);
         });
 
         if (_.isFunction(metric.processor)) {

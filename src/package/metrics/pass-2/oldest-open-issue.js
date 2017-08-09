@@ -18,11 +18,14 @@ export const extractor = (raw, data) => {
   };
 };
 
-export const rules = [
-  { type: "pro", max: 10, message: "Oldest open issue is still active (updated {{#humanize}}{{value}}{{/humanize}} ago) - {{{extra.url}}}" },
-  { type: "note", min: 11, max: 20, message: "Oldest open issue has been dead for a while (updated {{#humanize}}{{value}}{{/humanize}} ago) - {{{extra.url}}}" },
-  { type: "cons", min: 21, message: "Oldest open issue is dead (updated {{#humanize}}{{value}}{{/humanize}} ago) - {{{extra.url}}}" },
-];
+export const rules = {
+  postfix: "(updated {{#humanize}}{{value}}{{/humanize}} ago) - {{{extra.url}}}",
+  rules: [
+    { type: "pro", max: 10, message: "Oldest open issue is still active" },
+    { type: "note", min: 11, max: 20, message: "Oldest open issue has been dead for a while" },
+    { type: "cons", min: 21, message: "Oldest open issue is dead" },
+  ],
+};
 
 export const score = {
   data: [[0, 30], [30, 0], [60, 0]],
