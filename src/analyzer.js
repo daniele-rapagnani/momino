@@ -15,8 +15,9 @@ export default async (packages, config) => {
       const pk = new Package(packageName, emitter, {
         auth: config.auth,
         debug: Boolean(process.env.DEBUG),
+        apiRateError: config.apiRateError,
       });
-      
+
       pk.init();
       await pk.analyze();
       pk.update();

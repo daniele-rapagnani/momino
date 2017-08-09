@@ -9,7 +9,7 @@ const githubClient = new github({
   debug: Boolean(process.env.DEBUG),
 });
 
-export default async (name, emitter, { auth }, raw) => {
+export default async (name, emitter, { auth, apiRateError }, raw) => {
   const versions = _.get(raw, "npm.versions", {});
   const lastVersion = Object.keys(versions).pop();
 
@@ -105,7 +105,13 @@ export default async (name, emitter, { auth }, raw) => {
     "data"
   ));
 
-  const github = (await Promise.all(promises)).reduce((acc, b) => ({...acc, ...b}));
+  try {
+    return (await Promise.all(promises)).reduce((acc, b) => ({...acc, ...b}));
+  } catch (e) {
+    if (e.message.match("#rate-limiting") && apiRateError) {
+      throw apiRateError("GitHub", e);
+    }
 
-  return github;
+    throw e;
+  }
 };

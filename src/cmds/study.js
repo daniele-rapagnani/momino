@@ -74,7 +74,15 @@ export const handler = createHandler(async (argv, spinner, auth) => {
   }
 
   const projectConfig = getProjectConfig();
-  const config = _.merge({}, projectConfig, argv, { auth });
+  const config = _.merge({}, projectConfig, argv, {
+    auth,
+    apiRateError: (service) => {
+      return new Error(
+        chalk.red.bold(`You reached your ${service} API limit.\n`) +
+        chalk.red(`Try running ${argv.$0} with -A or run '${argv.$0} configure' command to permanently set your credentials.`)
+      );
+    },
+  });
 
   const results = await analyzer(packages, config);
 
