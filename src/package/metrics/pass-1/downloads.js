@@ -10,10 +10,4 @@ export const rules = [
   { type: "cons", max: 199999, message: "Is not adopted by many projects ({{#number}}{{value}}{{/number}} total installs)" },
 ];
 
-export const score = {
-  data: [
-    [0, 0], [10000, 5], [100000, 10], [500000, 50],
-    [1000000, 150], [6000000, 200], [20000000, 500],
-    [2000000000, 6000],
-  ],
-};
+export const score = (value, data) => (value / 100) * (1 / (data.age.value / 10));

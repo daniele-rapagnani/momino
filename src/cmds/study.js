@@ -62,6 +62,10 @@ export const handler = createHandler(async (argv, spinner, auth) => {
 
   emitter.on("package.updated", () => spinner.stop());
 
+  emitter.on("*.warning", (event) => {
+    process.stdout.write(`\n${chalk.bold.yellow("Warning")}: ${chalk.yellow(event.text)}.\n`);
+  });
+
   if (!packages || packages.length == 0 ) {
     packages = getProjectDependencies();
 

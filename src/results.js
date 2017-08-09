@@ -1,11 +1,12 @@
 import _ from "lodash";
 import chalk from "chalk";
 import pluralize from "pluralize";
+import numeral from "numeral";
 
 const out = (msg) => process.stdout.write(`${msg}\n`);
 
 export function printScore(pkg) {
-  out(`\n${chalk.bold(pkg.name)} has scored: ${chalk.green.bold(pkg.score)}\n`);
+  out(`\n${chalk.bold(pkg.name)} has scored: ${chalk.green.bold(numeral(pkg.score).format("0,0"))}\n`);
 }
 
 export function printList(pkg, list, label, color = "green", withMetric = true) {

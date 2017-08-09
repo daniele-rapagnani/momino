@@ -13,9 +13,9 @@ export const extractor = (raw) => {
 };
 
 export const rules = [
-  { type: "pro", max: 5, message: "Issues are closed fast (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
-  { type: "note", min: 6, max: 10, message: "Closing issues tooks some time (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
-  { type: "cons", min: 11, message: "Issues took a lot of time to be closed (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount}} issues)" },
+  { type: "pro", max: 5, message: "Issues are closed fast (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount.value}} issues)" },
+  { type: "note", min: 6, max: 10, message: "Closing issues tooks some time (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount.value}} issues)" },
+  { type: "cons", min: 11, message: "Issues took a lot of time to be closed (average of {{#humanize}}{{value}}{{/humanize}} on {{_data.issueClosingCount.value}} issues)" },
 ];
 
 export const score = {

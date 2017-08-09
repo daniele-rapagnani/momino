@@ -121,6 +121,12 @@ export default class Package {
         }
 
         this.data[metricName] = this.metrics[metricName].extractor(rawData, this.data);
+
+        if (_.isNumber(this.data[metricName])) {
+          this.data[metricName] = {
+            value: this.data[metricName],
+          };
+        }
       }
     );
 
@@ -139,49 +145,47 @@ export default class Package {
         return;
       }
 
-      let value = this.data[metricName];
-
-      if (!_.isNumber(value)) {
-        value = _.get(value, "value");
-      }
+      const value = _.get(this.data[metricName], "value");
 
       if (!value) {
         this.scorePartials[metricName] = 0;
+      } else if (_.isFunction(scoreDef)) {
+        this.scorePartials[metricName] = Math.round(scoreDef(value, this.data));
+      } else {
+        scoreDef = _.assign({ regression: "linear" }, scoreDef);
+
+        let insPos = _.findLastIndex(scoreDef.data, (d) => d[0] < value);
+        const data = [].concat(scoreDef.data);
+
+        if (insPos < 0) {
+          insPos = data.length;
+        }
+
+        data.splice(insPos + 1, 0, [value, null]);
+
+        winston.debug(
+          "Analyzing score data",
+          data,
+          "value inserted at index",
+          insPos,
+          "with regression",
+          scoreDef.regression
+        );
+
+        const prediction = regression(
+          scoreDef.regression,
+          data,
+          3
+        );
+
+        this.scorePartials[metricName] = Math.max(0, _.get(
+          prediction.points.filter((item) => item[0] == value),
+          "[0][1]",
+          0
+        ));
+
+        winston.debug("Prediction", prediction);
       }
-
-      scoreDef = _.assign({ regression: "linear" }, scoreDef);
-
-      let insPos = _.findLastIndex(scoreDef.data, (d) => d[0] < value);
-      const data = [].concat(scoreDef.data);
-
-      if (insPos < 0) {
-        insPos = data.length;
-      }
-
-      data.splice(insPos + 1, 0, [value, null]);
-
-      winston.debug(
-        "Analyzing score data",
-        data,
-        "value inserted at index",
-        insPos,
-        "with regression",
-        scoreDef.regression
-      );
-
-      const prediction = regression(
-        scoreDef.regression,
-        data,
-        3
-      );
-
-      winston.debug("Prediction", prediction);
-
-      this.scorePartials[metricName] = Math.max(0, _.get(
-        prediction.points.filter((item) => item[0] == value),
-        "[0][1]",
-        0
-      ));
     });
 
     this.score = Math.round(_.values(this.scorePartials).reduce((a, b) => a + b));
@@ -241,13 +245,8 @@ export default class Package {
   }
 
   processRate(rateData, rule, threshold, metric) {
-    let rate = rateData;
-    let extra = {};
-
-    if (!_.isNumber(rateData)) {
-      rate = _.get(rateData, "value", false);
-      extra = _.get(rateData, "extra", {});
-    }
+    let rate = _.get(rateData, "value", false);
+    const extra = _.get(rateData, "extra", {});
 
     if (rate === false) {
       return;

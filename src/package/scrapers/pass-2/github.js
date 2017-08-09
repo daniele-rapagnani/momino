@@ -50,6 +50,10 @@ export default async (name, emitter, { auth, apiRateError }, raw) => {
       type: "token",
       token: store.github.get("githubToken"),
     });
+  } else {
+    emitter.emit("github.warning", {
+      text: "You are using GitHub API anonymously. You will reach the rate limit very fast, please use the -A switch or run the configure command",
+    });
   }
 
   emitter.emit("github.progress", { text: "Fetching repository information" });
