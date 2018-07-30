@@ -6,6 +6,10 @@
   "bin": {
     "momino": "./dist/index.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daniele-rapagnani/momino.git"
+  },
   "scripts": {
     "build": "rimraf dist && babel src --out-dir dist && chmod +x dist/index.js",
     "test": "eslint index.js src/"
