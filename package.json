@@ -1,8 +1,9 @@
 {
   "name": "momino",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Monitors the health of your project's dependencies",
   "main": "dist/index.js",
+  "keywords": ["dependency", "package analyzer", "repository analyzer", "dependency evaluator", "package score", "package health", "community analyzer"],
   "bin": {
     "momino": "./dist/index.js"
   },
@@ -18,7 +19,7 @@
     "lib": "./dist"
   },
   "author": "Daniele Rapagnani",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "babel-cli": "^6.22.2",
     "babel-preset-env": "^1.4.0",
