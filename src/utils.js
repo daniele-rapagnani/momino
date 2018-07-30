@@ -63,7 +63,7 @@ export const getProjectDependencies = () => {
 };
 
 export const getProjectConfig = () => {
-  const configPath = path.join(process.cwd(), ".monkrc.json");
+  const configPath = path.join(process.cwd(), ".mominorc.json");
 
   if (!fs.existsSync(configPath)) {
     return {};

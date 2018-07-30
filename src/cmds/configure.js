@@ -5,13 +5,13 @@ export const command = "configure";
 export const desc = "Configuration wizard";
 
 export const handler = async () => {
-  const wantGithubToken = await inquirer.prompt({
+  const answer = await inquirer.prompt({
     name: "wantGithubToken",
     message: "Do you want to use your GitHub token? (this will speed up studying packages)",
     type: "confirm",
   });
 
-  if (wantGithubToken) {
+  if (answer.wantGithubToken) {
     const token = await inquirer.prompt({
       name: "githubToken",
       message: "Insert your GitHub personal access token",

@@ -1,16 +1,10 @@
 {
-  "name": "monk",
+  "name": "momino",
   "version": "0.1.0",
-  "description": "Evaluate the quality of your project dependencies",
+  "description": "Monitors the health of your project's dependencies",
   "main": "dist/index.js",
-  "ava": {
-    "babel": "inherit",
-    "require": [
-      "babel-register"
-    ]
-  },
   "bin": {
-    "monk": "./dist/index.js"
+    "momino": "./dist/index.js"
   },
   "scripts": {
     "build": "rimraf dist && babel src --out-dir dist && chmod +x dist/index.js",
@@ -46,7 +40,6 @@
     "yargs": "^8.0.0"
   },
   "devDependencies": {
-    "ava": "^0.18.1",
     "babel-plugin-transform-object-rest-spread": "^6.23.0",
     "eslint": "^3.15.0",
     "pre-commit": "^1.2.2",

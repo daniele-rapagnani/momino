@@ -9,13 +9,17 @@ import analyzer from "../analyzer";
 export const command = ["study [package...]", "*"];
 export const desc = "Displays a package score";
 export const builder = createBuilder((yargs) => {
+  const projectConfig = getProjectConfig();
+
   yargs.option("ranges", {
     alias: "r",
     description: "Specifies the score ranges to use when deciding " +
       "if you should use a package or not this" +
       " is in the format: [lowest score, good score]",
     type: "array",
-    default: [300, 500],
+
+    // This is needed to override ranges from a .mominorc.json
+    default: (projectConfig.ranges || [300, 500]),
   });
 
   yargs.option("test", {
@@ -78,6 +82,7 @@ export const handler = createHandler(async (argv, spinner, auth) => {
   }
 
   const projectConfig = getProjectConfig();
+
   const config = _.merge({}, projectConfig, argv, {
     auth,
     apiRateError: (service) => {
