@@ -95,7 +95,7 @@ A custom configuration can look something like:
 ```
 
 The options specified in the configuration file
-can still be overriden on the command line.
+can still be overridden on the command line.
 
 # How it works
 
