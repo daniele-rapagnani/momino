@@ -105,7 +105,7 @@ repository and if there is, it starts to analyze it in order to
 extract meaningful information about the develpment process,
 the community, etc. All the data collected is then mapped to some
 value, using custom heuristics, and then a simple linear regression
-is used on some sample data to output the final value.s
+is used on some sample data to output the final value.
 
 This algorithm is far from perfect but it still manages to give
 useful insights.
