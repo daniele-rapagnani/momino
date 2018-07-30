@@ -2,11 +2,11 @@
 
 Momino is an npm package adoption advisor: it inspects your project's dependencies in order to assign a score based on heuristics about development continuity, community health and global adoption.
 
-![Momino](https://raw.github.com/daniele-rapagnani/momino/master/docs/momino.gif)
+![Momino](https://raw.githubusercontent.com/daniele-rapagnani/momino/master/docs/momino_test.gif)
 
 Momino can be used in test mode and integrated in your favourite CI environment or pre-commit hooks.
 
-![Momino Test Mode](https://raw.github.com/daniele-rapagnani/momino/master/docs/momino_test.gif)
+![Momino Test Mode](https://raw.githubusercontent.com/daniele-rapagnani/momino/master/docs/momino_test.gif)
 
 # Install
 
